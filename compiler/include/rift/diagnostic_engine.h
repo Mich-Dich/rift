@@ -57,7 +57,7 @@ namespace rift {
 
         const std::vector<diagnostic>& diagnostics() const noexcept { return m_diagnostics; }
 
-        void print_all(std::ostream& os, const source_manager& sm) const;
+        void print_all(std::ostream& os, const source_manager& sm, const diagnostic_style& style = {}) const;
 
     private:
 

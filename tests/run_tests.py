@@ -55,7 +55,7 @@ def run(cmd, *, stdin=None, cwd=None):
     )
 
 
-# ── Driver tests ────────────────────────────────────────────────
+# Driver tests ---------------------------------------------------------------------------------------------------------
 
 def driver_tests(riftc: str):
     results = []
@@ -65,10 +65,8 @@ def driver_tests(riftc: str):
 
     r = run([riftc, "--version"])
     check("driver: --version exits 0", r.returncode == 0, f"exit={r.returncode}")
-    check("driver: --version prints semver",
-          bool(re.match(r"^riftc \d+\.\d+\.\d+", r.stdout)), f"stdout={r.stdout!r}")
-    check("driver: --version mentions M1", "(M1)" in r.stdout,
-          f"stdout={r.stdout!r}")
+    check("driver: --version prints semver", bool(re.match(r"^riftc \d+\.\d+\.\d+", r.stdout)), f"stdout={r.stdout!r}")
+    check("driver: --version mentions milestone", re.search(r"\(M\d+\)", r.stdout) is not None, f"stdout={r.stdout!r}")
 
     r = run([riftc, "version"])
     check("driver: 'version' subcommand exits 0", r.returncode == 0)
@@ -90,8 +88,7 @@ def driver_tests(riftc: str):
 
     r = run([riftc, "compile", "definitely-not-a-file.rfts", "-o", "/tmp/x"])
     check("driver: compile missing file exits nonzero", r.returncode != 0)
-    check("driver: compile missing file reports 'not found'",
-          "not found" in r.stderr.lower())
+    check("driver: compile missing file reports 'not found'", "not found" in r.stderr.lower())
 
     # lex subcommand
     r = run([riftc, "lex"])
@@ -102,22 +99,48 @@ def driver_tests(riftc: str):
         tmp = f.name
     try:
         r = run([riftc, "lex", tmp])
-        check("driver: lex on simple file exits 0", r.returncode == 0,
-              f"stderr={r.stderr!r}")
+        check("driver: lex on simple file exits 0", r.returncode == 0, f"stderr={r.stderr!r}")
         # The kind column is tab-delimited; look for "\tu32\t" rather than "prim_u32" because token_kind_name()
         # returns the pretty name ("u32", "identifier", ...), not the enum identifier
-        check("driver: lex dumps tokens to stdout",
-              "\tu32\t" in r.stdout and "\tidentifier\t" in r.stdout,
-              f"stdout={r.stdout!r}")
-        check("driver: lex output ends with eof",
-              "eof" in r.stdout.splitlines()[-1] if r.stdout else False)
+        check("driver: lex dumps tokens to stdout", "\tu32\t" in r.stdout and "\tidentifier\t" in r.stdout, f"stdout={r.stdout!r}")
+        check("driver: lex output ends with eof", "eof" in r.stdout.splitlines()[-1] if r.stdout else False)
+    finally:
+        os.unlink(tmp)
+
+    r = run([riftc, "parse"])
+    check("driver: parse with no input exits nonzero", r.returncode != 0)
+
+    r = run([riftc, "dump-ast"])
+    check("driver: dump-ast with no input exits nonzero", r.returncode != 0)
+
+    # --color flag
+    with tempfile.NamedTemporaryFile("w", suffix=".rfts", delete=False) as f:
+        f.write("u32 main() { return 0u32 }\n")   # missing semicolon
+        tmp = f.name
+    try:
+        r = run([riftc, "--color=always", "parse", tmp])
+        check("driver: --color=always emits ANSI codes on diagnostics", "\x1b[" in r.stderr, f"stderr={r.stderr!r}")
+        r = run([riftc, "--color=never", "parse", tmp])
+        check("driver: --color=never suppresses ANSI codes", "\x1b[" not in r.stderr, f"stderr={r.stderr!r}")
+    finally:
+        os.unlink(tmp)
+
+    with tempfile.NamedTemporaryFile("w", suffix=".rfts", delete=False) as f:
+        f.write("u32 main() { return 0u32; }\n")
+        tmp = f.name
+    try:
+        r = run([riftc, "parse", tmp])
+        check("driver: parse on simple file exits 0", r.returncode == 0, f"stderr={r.stderr!r}")
+        r = run([riftc, "dump-ast", tmp])
+        check("driver: dump-ast exits 0", r.returncode == 0, f"stderr={r.stderr!r}")
+        check("driver: dump-ast prints '(program'", "(program" in r.stdout, f"stdout={r.stdout!r}")
     finally:
         os.unlink(tmp)
 
     return results
 
 
-# ── Golden tests ───────────────────────────────────────────────
+# Golden tests ---------------------------------------------------------------------------------------------------------
 
 @dataclass
 class GoldenMetadata:
@@ -128,10 +151,11 @@ class GoldenMetadata:
     skip: str | None = None
     xfail: str | None = None
     expect_error: bool = False
+    mode: str = "auto"   # auto | lex | dump-ast | compile
 
 
 _DIRECTIVE_RE = re.compile(
-    r"^(EXIT|EXPECT_STDOUT|EXPECT_STDERR_CONTAINS|STDIN|SKIP|XFAIL|EXPECT_ERROR):\s*(.*)$"
+    r"^(EXIT|EXPECT_STDOUT|EXPECT_STDERR_CONTAINS|STDIN|SKIP|XFAIL|EXPECT_ERROR|MODE): ?(.*)$"
 )
 
 
@@ -165,6 +189,10 @@ def parse_metadata(path: Path) -> GoldenMetadata:
             meta.expect_error = True
             if value:
                 meta.expected_stderr_contains.append(value)
+        elif key == "MODE":
+            meta.mode = value.strip() or "auto"
+            if meta.mode not in ("auto", "lex", "dump-ast", "compile"):
+                raise ValueError(f"invalid MODE: {meta.mode!r}")
     return meta
 
 
@@ -180,71 +208,94 @@ def run_golden(path: Path, riftc: str) -> TestResult:
         return TestResult(name=name, passed=True, skipped=True, message=meta.skip)
 
     stdin_text = "\n".join(meta.stdin) + ("\n" if meta.stdin else "")
-    result = TestResult(name=name, passed=True)
 
-    # Try `compile` first.
-    with tempfile.TemporaryDirectory() as tmp:
-        out_path = Path(tmp) / (path.stem + ".out")
-        proc = run([riftc, "compile", str(path), "-o", str(out_path)],
-                   stdin=stdin_text)
+    def run_compiler(*args):
+        return run([riftc, *args], stdin=stdin_text)
 
-        # If the compiler isn't at codegen yet, fall back to `lex`.
-        if proc.returncode == NOT_IMPLEMENTED:
-            proc = run([riftc, "lex", str(path)], stdin=stdin_text)
-            out_path = None  # no binary expected
+    stdout_for_assertion = ""
+    stderr_for_assertion = ""
+    exit_code = 0
 
-        if meta.expect_error:
-            exit_ok = (
-                proc.returncode == meta.exit_code
-                if meta.exit_code != 0
-                else proc.returncode != 0
-            )
-            stderr_ok = all(
-                s in proc.stderr for s in meta.expected_stderr_contains
-            )
-            ok = exit_ok and stderr_ok
-            if meta.xfail is not None:
-                ok = not ok
-            return TestResult(
-                name=name, passed=ok,
-                message="" if ok else (
-                    f"expected error exit={meta.exit_code} "
-                    f"containing {meta.expected_stderr_contains!r}, "
-                    f"got exit={proc.returncode} stderr={proc.stderr!r}"),
-            )
+    if meta.mode == "lex":
+        result = run_compiler("lex", str(path))
+        stdout_for_assertion = result.stdout
+        stderr_for_assertion = result.stderr
+        exit_code = result.returncode
 
-        if proc.returncode != 0:
-            msg = f"compiler failed (exit={proc.returncode}): {proc.stderr}"
+    elif meta.mode == "dump-ast":
+        result = run_compiler("dump-ast", str(path))
+        stdout_for_assertion = result.stdout
+        stderr_for_assertion = result.stderr
+        exit_code = result.returncode
+
+    elif meta.mode == "compile":
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / (path.stem + ".out")
+            result = run_compiler("compile", str(path), "-o", str(out_path))
+            stderr_for_assertion = result.stderr
+            if result.returncode == 0 and out_path.exists():
+                exec_result = run([str(out_path)], stdin=stdin_text)
+                stdout_for_assertion = exec_result.stdout
+                stderr_for_assertion = exec_result.stderr
+                exit_code = exec_result.returncode
+            else:
+                stdout_for_assertion = result.stdout
+                exit_code = result.returncode
+
+    else:  # auto
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / (path.stem + ".out")
+            result = run_compiler("compile", str(path), "-o", str(out_path))
+            if result.returncode == NOT_IMPLEMENTED:
+                result = run_compiler("dump-ast", str(path))
+                if result.returncode == NOT_IMPLEMENTED:
+                    result = run_compiler("lex", str(path))
+                stdout_for_assertion = result.stdout
+                stderr_for_assertion = result.stderr
+                exit_code = result.returncode
+            elif result.returncode == 0 and out_path.exists():
+                exec_result = run([str(out_path)], stdin=stdin_text)
+                stdout_for_assertion = exec_result.stdout
+                stderr_for_assertion = exec_result.stderr
+                exit_code = exec_result.returncode
+            else:
+                stdout_for_assertion = result.stdout
+                stderr_for_assertion = result.stderr
+                exit_code = result.returncode
+
+    if meta.expect_error:
+        exit_ok = (exit_code == meta.exit_code) if meta.exit_code != 0 else (exit_code != 0)
+        stderr_ok = all(s in stderr_for_assertion for s in meta.expected_stderr_contains)
+        ok = exit_ok and stderr_ok
+        if meta.xfail is not None:
+            ok = not ok
+        return TestResult(
+            name=name, passed=ok,
+            message="" if ok else (
+                f"expected error exit={meta.exit_code} "
+                f"containing {meta.expected_stderr_contains!r}, "
+                f"got exit={exit_code} stderr={stderr_for_assertion!r}"),
+        )
+
+    if exit_code != meta.exit_code:
+        msg = (f"expected exit {meta.exit_code}, got {exit_code}\n"
+               f"stderr: {stderr_for_assertion!r}")
+        if meta.xfail is not None:
+            return TestResult(name=name, passed=True, xfailed=True, message=msg)
+        return TestResult(name=name, passed=False, message=msg)
+
+    if meta.expected_stdout:
+        want = "\n".join(meta.expected_stdout)
+        got = stdout_for_assertion.rstrip("\n")
+        if got != want:
+            msg = f"stdout mismatch:\n  want: {want!r}\n  got:  {got!r}"
             if meta.xfail is not None:
                 return TestResult(name=name, passed=True, xfailed=True, message=msg)
             return TestResult(name=name, passed=False, message=msg)
 
-        if out_path is not None and not out_path.exists():
-            msg = f"compiler succeeded but produced no output at {out_path}"
-            if meta.xfail is not None:
-                return TestResult(name=name, passed=True, xfailed=True, message=msg)
-            return TestResult(name=name, passed=False, message=msg)
+    return TestResult(name=name, passed=True)
 
-        if out_path is not None:
-            exec_proc = run([str(out_path)], stdin=stdin_text)
-            if exec_proc.returncode != meta.exit_code:
-                return TestResult(
-                    name=name, passed=False,
-                    message=f"expected exit {meta.exit_code}, got {exec_proc.returncode}",
-                )
-            if meta.expected_stdout:
-                want = "\n".join(meta.expected_stdout)
-                got = exec_proc.stdout.rstrip("\n")
-                if got != want:
-                    return TestResult(
-                        name=name, passed=False,
-                        message=f"stdout mismatch: want {want!r}, got {got!r}",
-                    )
-
-        return result
-
-
-# ── Entry point ────────────────────────────────────────────────
+# Entry point ----------------------------------------------------------------------------------------------------------
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Rift compiler test runner")

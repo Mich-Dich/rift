@@ -1,0 +1,17 @@
+
+// MODE: dump-ast
+// EXIT: 0
+// EXPECT_STDOUT: (program
+// EXPECT_STDOUT:   (function main -> u32
+// EXPECT_STDOUT:     (params)
+// EXPECT_STDOUT:     (block
+// EXPECT_STDOUT:       (return
+// EXPECT_STDOUT:         (int_literal 0u32 u32)
+// EXPECT_STDOUT:       )
+// EXPECT_STDOUT:     )
+// EXPECT_STDOUT:   )
+// EXPECT_STDOUT: )
+
+u32 main() {
+    return 0u32;
+}

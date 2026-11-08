@@ -1,0 +1,8 @@
+
+// MODE: dump-ast
+// EXIT: 1
+// EXPECT_STDERR_CONTAINS: expected ';' after return statement
+
+u32 main() {
+    return 0u32
+}

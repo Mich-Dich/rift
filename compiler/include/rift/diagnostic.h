@@ -52,6 +52,16 @@ namespace rift {
         invalid_char_in_literal,
         invalid_unicode_codepoint,
         trailing_underscore_in_number,
+
+        // Parser ------------------------------------------------------------------------------------------------------
+        expected_token = 100,           // generic "expected X, found Y"
+        expected_expression,
+        expected_declaration,
+        expected_identifier,
+        expected_type,
+        expected_block,
+        unexpected_token,
+        unterminated_block,
     };
 
 
@@ -61,7 +71,14 @@ namespace rift {
         source_span                     span;
         diagnostic_code                 code = diagnostic_code::unexpected_character;
         std::string                     message;
+        std::string                     help;
         std::vector<std::string>        notes;
+    };
+
+
+    struct diagnostic_style {
+
+        bool                            use_color = false;
     };
 
     // STATIC VARIABLES ================================================================================================
@@ -85,7 +102,7 @@ namespace rift {
     //    3 |     let s = "hello
     //      |             ^^^^^^
     //
-    void print_diagnostic(std::ostream& os, const diagnostic& d, const source_manager& sm);
+    void print_diagnostic(std::ostream& os, const diagnostic& d, const source_manager& sm, const diagnostic_style& style = {});
 
     // TEMPLATE DECLARATION ============================================================================================
 

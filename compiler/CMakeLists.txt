@@ -2,14 +2,14 @@
 # librift: the frontend library ----------------------------------------------------------------------------------------
 
 set(RIFT_LIB_NAME                                                       librift)
-add_library(${RIFT_LIB_NAME}
-    src/version.cpp
-    src/source.cpp
-    src/diagnostic.cpp
-    src/diagnostic_engine.cpp
-    src/token.cpp
-    src/lexer.cpp
+
+file(GLOB_RECURSE                                                       CORE_SOURCES
+    CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cxx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
 )
+add_library(${RIFT_LIB_NAME}                                            ${CORE_SOURCES})
 set_target_properties(${RIFT_LIB_NAME}                                  PROPERTIES
     BUILD_RPATH                                                         "/opt/gcc-16.2/lib64"
     INSTALL_RPATH                                                       "/opt/gcc-16.2/lib64"

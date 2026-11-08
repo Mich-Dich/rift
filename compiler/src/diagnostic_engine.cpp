@@ -53,13 +53,13 @@ namespace rift {
     }
 
 
-    void diagnostic_engine::print_all(std::ostream& os, const source_manager& sm) const {
+    void diagnostic_engine::print_all(std::ostream& os, const source_manager& sm, const diagnostic_style& style) const {
 
         bool first = true;
         for (const auto& d : m_diagnostics) {
             if (!first) os << '\n';
             first = false;
-            print_diagnostic(os, d, sm);
+            print_diagnostic(os, d, sm, style);
         }
     }
 
