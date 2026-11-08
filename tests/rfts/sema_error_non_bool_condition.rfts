@@ -1,0 +1,11 @@
+
+// MODE: check
+// EXIT: 1
+// EXPECT_STDERR_CONTAINS: 'if' condition must be 'bool'
+
+u32 main() {
+    if (1u32) {
+        return 0u32;
+    }
+    return 1u32;
+}

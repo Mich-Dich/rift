@@ -59,6 +59,7 @@ namespace rift {
 
             case token_kind::kw_if:                     return "if";
             case token_kind::kw_else:                   return "else";
+            case token_kind::kw_while:                  return "while";
             case token_kind::kw_match:                  return "match";
             case token_kind::kw_for:                    return "for";
             case token_kind::kw_in:                     return "in";

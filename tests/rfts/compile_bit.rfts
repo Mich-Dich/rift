@@ -1,0 +1,8 @@
+
+// MODE: compile
+// EXIT: 8
+
+u32 main() {
+    u32 x = bit(3u32);
+    return x;
+}

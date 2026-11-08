@@ -42,6 +42,7 @@ namespace rift {
             // Control flow
             {"if",                      token_kind::kw_if},
             {"else",                    token_kind::kw_else},
+            {"while",                   token_kind::kw_while},
             {"match",                   token_kind::kw_match},
             {"for",                     token_kind::kw_for},
             {"in",                      token_kind::kw_in},

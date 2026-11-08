@@ -1,0 +1,8 @@
+
+// MODE: compile
+// EXIT: 0
+
+u32 main() {
+    u32 x = default;
+    return x;
+}

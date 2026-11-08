@@ -352,18 +352,28 @@ namespace rift {
         if (check(token_kind::kw_return))
             return parse_return_stmt();
 
+        if (check(token_kind::kw_if))
+            return parse_if_stmt();
+
+        if (check(token_kind::kw_while))
+            return parse_while_stmt();
+
         if (check(token_kind::kw_mut))
             return parse_var_decl();
 
         if (current().is_primitive_type())
             return parse_var_decl();
 
-        // `identifier identifier ...` — treat as a var decl using a named type.
+        // `<Type> <name> ...` — named-type var decl.
         if (check(token_kind::identifier) && peek(1).kind == token_kind::identifier)
             return parse_var_decl();
 
-        error(diagnostic_code::expected_declaration, current().span, std::format("expected 'return' or a variable declaration, found '{}'",
-            token_kind_name(current().kind)));
+        // `<name> = <expr> ;` — assignment.
+        if (check(token_kind::identifier) && peek(1).kind == token_kind::eq)
+            return parse_assign_stmt();
+
+        error(diagnostic_code::expected_declaration, current().span,
+            std::format("expected a statement, found '{}'", token_kind_name(current().kind)));
         return node_id{};
     }
 
@@ -407,7 +417,15 @@ namespace rift {
         if (!expect(token_kind::eq, diagnostic_code::expected_token, "expected '=' in variable declaration"))
             return node_id{};
 
-        const node_id init = parse_expression();
+        node_id init;
+        if (check(token_kind::kw_default)) {
+            const token d = advance();
+            default_init_node n;
+            n.span = d.span;
+            init = m_arena.add(std::move(n));
+        } else
+            init = parse_expression();
+
         if (!init.is_valid())
             return node_id{};
 
@@ -444,6 +462,98 @@ namespace rift {
 
         error_expected("a type");
         return node_id{};
+    }
+
+
+    node_id parser::parse_assign_stmt() {
+
+        const std::uint32_t start_off = current().span.begin;
+        const token name_tok = advance();   // identifier
+
+        advance();                          // '='
+
+        identifier_node target;
+        target.name = name_tok.lexeme;
+        target.span = name_tok.span;
+        const node_id target_id = m_arena.add(std::move(target));
+
+        const node_id value = parse_expression();
+        if (!value.is_valid())
+            return node_id{};
+
+        const source_span val_span = m_arena.span_of(value);
+        const std::uint32_t end_off = consume_semicolon_or_error(val_span, "expected ';' after assignment");
+
+        assign_stmt_node n;
+        n.target = target_id;
+        n.value = value;
+        n.span = make_span(start_off, end_off);
+        return m_arena.add(std::move(n));
+    }
+
+
+    node_id parser::parse_if_stmt() {
+
+        const std::uint32_t start_off = current().span.begin;
+        advance();  // 'if'
+
+        if (!expect(token_kind::l_paren, diagnostic_code::expected_token, "expected '(' after 'if'"))
+            return node_id{};
+
+        const node_id cond = parse_expression();
+        if (!cond.is_valid())
+            return node_id{};
+
+        if (!expect(token_kind::r_paren, diagnostic_code::expected_token, "expected ')' after if condition"))
+            return node_id{};
+
+        const node_id then_block = parse_block();
+        if (!then_block.is_valid())
+            return node_id{};
+
+        node_id else_block;
+        if (match(token_kind::kw_else)) {
+            if (check(token_kind::kw_if))
+                else_block = parse_if_stmt();     // `else if`
+            else
+                else_block = parse_block();       // `else { ... }`
+            if (!else_block.is_valid())
+                return node_id{};
+        }
+
+        if_stmt_node n;
+        n.condition = cond;
+        n.then_block = then_block;
+        n.else_block = else_block;
+        n.span = make_span(start_off, else_block.is_valid() ? m_arena.span_of(else_block).end : m_arena.span_of(then_block).end);
+        return m_arena.add(std::move(n));
+    }
+
+
+    node_id parser::parse_while_stmt() {
+
+        const std::uint32_t start_off = current().span.begin;
+        advance();  // 'while'
+
+        if (!expect(token_kind::l_paren, diagnostic_code::expected_token, "expected '(' after 'while'"))
+            return node_id{};
+
+        const node_id cond = parse_expression();
+        if (!cond.is_valid())
+            return node_id{};
+
+        if (!expect(token_kind::r_paren, diagnostic_code::expected_token, "expected ')' after while condition"))
+            return node_id{};
+
+        const node_id body = parse_block();
+        if (!body.is_valid())
+            return node_id{};
+
+        while_stmt_node n;
+        n.condition = cond;
+        n.body = body;
+        n.span = make_span(start_off, m_arena.span_of(body).end);
+        return m_arena.add(std::move(n));
     }
 
     // Expressions (Pratt) ---------------------------------------------------------------------------------------------
@@ -509,11 +619,63 @@ namespace rift {
             return m_arena.add(std::move(lit));
         }
 
-        if (t.kind == token_kind::identifier) {
+        if (t.kind == token_kind::kw_true || t.kind == token_kind::kw_false) {
             advance();
+            bool_literal_node n;
+            n.value = (t.kind == token_kind::kw_true);
+            n.span = t.span;
+            return m_arena.add(std::move(n));
+        }
+
+        if (t.kind == token_kind::kw_bit) {
+            const token kw = advance();
+            if (!expect(token_kind::l_paren, diagnostic_code::expected_token, "expected '(' after 'bit'"))
+                return node_id{};
+            const node_id operand = parse_expression(0);
+            if (!operand.is_valid())
+                return node_id{};
+            if (!expect(token_kind::r_paren, diagnostic_code::expected_token, "expected ')' after bit index"))
+                return node_id{};
+
+            bit_expr_node n;
+            n.operand = operand;
+            n.span = make_span(kw.span.begin, m_tokens[m_pos - 1].span.end);
+            return m_arena.add(std::move(n));
+        }
+
+        if (t.kind == token_kind::identifier) {
+            const token name_tok = advance();
+
+            if (check(token_kind::l_paren)) {
+                advance();  // '('
+
+                std::vector<node_id> args;
+                while (!check(token_kind::r_paren) && !check(token_kind::end_of_file)) {
+                    const node_id a = parse_expression(0);
+                    if (a.is_valid())
+                        args.push_back(a);
+                    if (!match(token_kind::comma))
+                        break;
+                }
+
+                if (!expect(token_kind::r_paren, diagnostic_code::expected_token, "expected ')' after call arguments"))
+                    return node_id{};
+
+                identifier_node callee;
+                callee.name = name_tok.lexeme;
+                callee.span = name_tok.span;
+                const node_id callee_id = m_arena.add(std::move(callee));
+
+                call_expr_node call;
+                call.callee = callee_id;
+                call.args = std::move(args);
+                call.span = make_span(name_tok.span.begin, m_tokens[m_pos - 1].span.end);
+                return m_arena.add(std::move(call));
+            }
+
             identifier_node id;
-            id.name = t.lexeme;
-            id.span = t.span;
+            id.name = name_tok.lexeme;
+            id.span = name_tok.span;
             return m_arena.add(std::move(id));
         }
 
@@ -521,8 +683,7 @@ namespace rift {
             advance();
             const node_id inner = parse_expression(0);
             if (!expect(token_kind::r_paren, diagnostic_code::expected_token, "expected ')' after expression"))
-                return inner;  // return what we have
-
+                return inner;
             return inner;
         }
 

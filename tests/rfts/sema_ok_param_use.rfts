@@ -1,0 +1,11 @@
+
+// MODE: check
+// EXIT: 0
+
+u32 id(u32 x) {
+    return x;
+}
+
+u32 main() {
+    return 0u32;
+}

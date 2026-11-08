@@ -58,6 +58,12 @@ namespace rift {
             else if constexpr (std::is_same_v<T, int_literal_node>)
                 return std::string("(int_literal ") + std::string(n.lexeme) + " " + std::string(token_kind_name(n.suffix_kind)) + ")";
 
+            else if constexpr (std::is_same_v<T, bool_literal_node>)
+                return std::string("(bool_literal ") + (n.value ? "true" : "false") + ")";
+
+            else if constexpr (std::is_same_v<T, default_init_node>)
+                return std::string("(default_init)");
+
             else
                 return "<non-leaf>";
         }, a.get(id));
@@ -158,6 +164,49 @@ namespace rift {
 
             } else if constexpr (std::is_same_v<T, primitive_type_node>)
                 os << p << "(type " << token_kind_name(n.type_kind) << ")\n";
+
+            else if constexpr (std::is_same_v<T, assign_stmt_node>) {
+
+                os << p << "(assign\n";
+                dump_node(a, n.target, os, indent + 1);
+                dump_node(a, n.value, os, indent + 1);
+                os << p << ")\n";
+
+            } else if constexpr (std::is_same_v<T, if_stmt_node>) {
+
+                os << p << "(if\n";
+                dump_node(a, n.condition, os, indent + 1);
+                dump_node(a, n.then_block, os, indent + 1);
+                if (n.else_block.is_valid())
+                    dump_node(a, n.else_block, os, indent + 1);
+                os << p << ")\n";
+
+            } else if constexpr (std::is_same_v<T, call_expr_node>) {
+
+                const auto& callee = a.get_as<identifier_node>(n.callee);
+                os << p << "(call " << callee.name << '\n';
+                for (const auto a_id : n.args) dump_node(a, a_id, os, indent + 1);
+                os << p << ")\n";
+
+            } else if constexpr (std::is_same_v<T, default_init_node>) {
+
+                os << p << "(default_init)\n";
+
+            } else if constexpr (std::is_same_v<T, bit_expr_node>) {
+
+                os << p << "(bit\n";
+                dump_node(a, n.operand, os, indent + 1);
+                os << p << ")\n";
+
+            } else if constexpr (std::is_same_v<T, while_stmt_node>) {
+
+                os << p << "(while\n";
+                dump_node(a, n.condition, os, indent + 1);
+                dump_node(a, n.body, os, indent + 1);
+                os << p << ")\n";
+
+            } else if constexpr (std::is_same_v<T, bool_literal_node>)
+                os << p << "(bool_literal " << (n.value ? "true" : "false") << ")\n";
 
             else if constexpr (std::is_same_v<T, named_type_node>)
                 os << p << "(type " << n.name << ")\n";

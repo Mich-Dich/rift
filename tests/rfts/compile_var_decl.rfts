@@ -1,0 +1,8 @@
+
+// MODE: compile
+// EXIT: 7
+
+u32 main() {
+    u32 x = 7u32;
+    return x;
+}

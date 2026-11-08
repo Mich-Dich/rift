@@ -87,6 +87,9 @@ namespace rift {
         node_id parse_return_stmt();
         node_id parse_var_decl();
         node_id parse_type();
+        node_id parse_if_stmt();
+        node_id parse_while_stmt();
+        node_id parse_assign_stmt();
 
         // Expressions (Pratt) --------------------------------------------------------------------------------------
 

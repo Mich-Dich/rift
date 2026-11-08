@@ -86,6 +86,20 @@ def driver_tests(riftc: str):
     r = run([riftc, "compile"])
     check("driver: compile with no input exits nonzero", r.returncode != 0)
 
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "main.rfts"
+        src.write_text("u32 main() { return 7u32; }\n")
+        out = Path(tmp) / "main.out"
+        r = run([riftc, "compile", str(src), "-o", str(out)])
+        check("driver: compile minimal program exits 0",
+            r.returncode == 0, f"stderr={r.stderr!r}")
+        check("driver: compile produced an executable",
+            out.exists(), f"missing {out}")
+        if out.exists():
+            exe = run([str(out)])
+            check("driver: compiled program exit code is 7",
+                exe.returncode == 7, f"returncode={exe.returncode}")
+
     r = run([riftc, "compile", "definitely-not-a-file.rfts", "-o", "/tmp/x"])
     check("driver: compile missing file exits nonzero", r.returncode != 0)
     check("driver: compile missing file reports 'not found'", "not found" in r.stderr.lower())
@@ -112,6 +126,28 @@ def driver_tests(riftc: str):
 
     r = run([riftc, "dump-ast"])
     check("driver: dump-ast with no input exits nonzero", r.returncode != 0)
+
+    r = run([riftc, "check"])
+    check("driver: check with no input exits nonzero", r.returncode != 0)
+
+    with tempfile.NamedTemporaryFile("w", suffix=".rfts", delete=False) as f:
+        f.write("u32 main() { return 0u32; }\n")
+        tmp = f.name
+    try:
+        r = run([riftc, "check", tmp])
+        check("driver: check on valid file exits 0", r.returncode == 0, f"stderr={r.stderr!r}")
+    finally:
+        os.unlink(tmp)
+
+    with tempfile.NamedTemporaryFile("w", suffix=".rfts", delete=False) as f:
+        f.write("u32 main() { return 1i32; }\n")   # return type mismatch
+        tmp = f.name
+    try:
+        r = run([riftc, "check", tmp])
+        check("driver: check on type error exits nonzero", r.returncode != 0, f"stderr={r.stderr!r}")
+        check("driver: check reports type mismatch", "type mismatch" in r.stderr, f"stderr={r.stderr!r}")
+    finally:
+        os.unlink(tmp)
 
     # --color flag
     with tempfile.NamedTemporaryFile("w", suffix=".rfts", delete=False) as f:
@@ -191,7 +227,7 @@ def parse_metadata(path: Path) -> GoldenMetadata:
                 meta.expected_stderr_contains.append(value)
         elif key == "MODE":
             meta.mode = value.strip() or "auto"
-            if meta.mode not in ("auto", "lex", "dump-ast", "compile"):
+            if meta.mode not in ("auto", "lex", "dump-ast", "check", "compile"):
                 raise ValueError(f"invalid MODE: {meta.mode!r}")
     return meta
 
@@ -201,8 +237,7 @@ def run_golden(path: Path, riftc: str) -> TestResult:
     try:
         meta = parse_metadata(path)
     except Exception as exc:
-        return TestResult(name=name, passed=False,
-                          message=f"failed to parse metadata: {exc}")
+        return TestResult(name=name, passed=False, message=f"failed to parse metadata: {exc}")
 
     if meta.skip is not None:
         return TestResult(name=name, passed=True, skipped=True, message=meta.skip)
@@ -241,6 +276,12 @@ def run_golden(path: Path, riftc: str) -> TestResult:
             else:
                 stdout_for_assertion = result.stdout
                 exit_code = result.returncode
+
+    elif meta.mode == "check":
+        result = run_compiler("check", str(path))
+        stdout_for_assertion = result.stdout
+        stderr_for_assertion = result.stderr
+        exit_code = result.returncode
 
     else:  # auto
         with tempfile.TemporaryDirectory() as tmp:

@@ -28,10 +28,10 @@ namespace rift {
 
     // STATIC VARIABLES ================================================================================================
 
-    constexpr version_info current_version() noexcept { return version_info{ 0, 2, 0, "M2" }; }
+    constexpr version_info current_version() noexcept { return version_info{ 0, 6, 0, "M6" }; }
+
 
     std::string format_version();
-
 
     // FUNCTION DECLARATION ============================================================================================
 

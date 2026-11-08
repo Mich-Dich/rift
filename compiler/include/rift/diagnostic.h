@@ -62,6 +62,28 @@ namespace rift {
         expected_block,
         unexpected_token,
         unterminated_block,
+
+        type_mismatch = 200,
+        invalid_condition_type,
+        cannot_assign_immutable,
+        argument_count_mismatch,
+        bit_index_out_of_range,
+        default_requires_context,
+        unknown_identifier,
+        unknown_type,
+        invalid_operand_type,
+        integer_literal_overflow,
+        integer_out_of_range,
+        duplicate_variable,
+        duplicate_parameter,
+        duplicate_function,
+        missing_main,
+        invalid_main_return_type,
+        invalid_main_signature,
+
+        // Codegen -----------------------------------------------------------------------------------------------------
+        codegen_internal_failure = 300,
+
     };
 
 

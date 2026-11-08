@@ -1,4 +1,5 @@
 
+// MODE: lex
 // EXIT: 1
 // EXPECT_STDERR_CONTAINS: unknown escape sequence
 

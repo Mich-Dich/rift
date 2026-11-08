@@ -1,0 +1,8 @@
+
+// MODE: check
+// EXIT: 1
+// EXPECT_STDERR_CONTAINS: 'main' must return 'u32'
+
+i32 main() {
+    return 0i32;
+}

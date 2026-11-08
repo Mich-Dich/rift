@@ -1,0 +1,11 @@
+
+// MODE: compile
+// EXIT: 5
+
+u32 add(u32 a, u32 b) {
+    return a + b;
+}
+
+u32 main() {
+    return add(2u32, 3u32);
+}

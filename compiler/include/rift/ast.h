@@ -26,16 +26,24 @@ namespace rift {
     // TYPES ===========================================================================================================
 
     enum class node_kind : std::uint8_t {
+
         program,
         function,
         parameter,
         block,
         return_stmt,
         var_decl,
+        assign_stmt,
+        if_stmt,
+        while_stmt,
         int_literal,
+        bool_literal,
         identifier,
         unary_expr,
         binary_expr,
+        call_expr,
+        default_init,
+        bit_expr,
         primitive_type,
         named_type,
     };
@@ -154,6 +162,29 @@ namespace rift {
     };
 
 
+    struct call_expr_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::call_expr;
+
+        node_id                             callee;   // identifier_node
+        std::vector<node_id>                args;
+    };
+
+
+    struct default_init_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::default_init;
+    };
+
+
+    struct bit_expr_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::bit_expr;
+
+        node_id                             operand;  // the bit index
+    };
+
+
     struct primitive_type_node : node_base {
 
         static constexpr node_kind          kind = node_kind::primitive_type;
@@ -170,6 +201,42 @@ namespace rift {
     };
 
 
+    struct assign_stmt_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::assign_stmt;
+
+        node_id                             target;   // must be an identifier_node
+        node_id                             value;
+    };
+
+
+    struct if_stmt_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::if_stmt;
+
+        node_id                             condition;
+        node_id                             then_block;  // block_node
+        node_id                             else_block;  // block_node or if_stmt_node (for `else if`); may be invalid
+    };
+
+
+    struct while_stmt_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::while_stmt;
+
+        node_id                             condition;
+        node_id                             body;        // block_node
+    };
+
+
+    struct bool_literal_node : node_base {
+
+        static constexpr node_kind          kind = node_kind::bool_literal;
+
+        bool                                value = false;
+    };
+
+
     using ast_variant = std::variant<
         program_node,
         function_node,
@@ -177,10 +244,17 @@ namespace rift {
         block_node,
         return_stmt_node,
         var_decl_node,
+        assign_stmt_node,
+        if_stmt_node,
+        while_stmt_node,
         int_literal_node,
+        bool_literal_node,
         identifier_node,
         unary_expr_node,
         binary_expr_node,
+        call_expr_node,
+        default_init_node,
+        bit_expr_node,
         primitive_type_node,
         named_type_node
     >;

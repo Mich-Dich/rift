@@ -1,0 +1,9 @@
+
+// MODE: check
+// EXIT: 1
+// EXPECT_STDERR_CONTAINS: integer literal 300 does not fit in 'u8'
+
+u32 main() {
+    u8 x = 300u8;
+    return 0u32;
+}

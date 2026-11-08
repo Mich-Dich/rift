@@ -1,0 +1,7 @@
+
+// MODE: compile
+// EXIT: 15
+
+u32 main() {
+    return 3u32 * 5u32;
+}

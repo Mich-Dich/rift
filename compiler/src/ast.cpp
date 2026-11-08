@@ -31,20 +31,27 @@ namespace rift {
     // FUNCTION IMPLEMENTATION =========================================================================================
 
     std::string_view node_kind_name(node_kind k) noexcept {
-
+        
         switch (k) {
-            case node_kind::program:        return "program";
-            case node_kind::function:       return "function";
-            case node_kind::parameter:      return "parameter";
-            case node_kind::block:          return "block";
-            case node_kind::return_stmt:    return "return_stmt";
-            case node_kind::var_decl:       return "var_decl";
-            case node_kind::int_literal:    return "int_literal";
-            case node_kind::identifier:     return "identifier";
-            case node_kind::unary_expr:     return "unary_expr";
-            case node_kind::binary_expr:    return "binary_expr";
-            case node_kind::primitive_type: return "primitive_type";
-            case node_kind::named_type:     return "named_type";
+            case node_kind::program:            return "program";
+            case node_kind::function:           return "function";
+            case node_kind::parameter:          return "parameter";
+            case node_kind::block:              return "block";
+            case node_kind::return_stmt:        return "return_stmt";
+            case node_kind::var_decl:           return "var_decl";
+            case node_kind::assign_stmt:        return "assign_stmt";
+            case node_kind::if_stmt:            return "if_stmt";
+            case node_kind::while_stmt:         return "while_stmt";
+            case node_kind::int_literal:        return "int_literal";
+            case node_kind::bool_literal:       return "bool_literal";
+            case node_kind::identifier:         return "identifier";
+            case node_kind::unary_expr:         return "unary_expr";
+            case node_kind::binary_expr:        return "binary_expr";
+            case node_kind::call_expr:          return "call_expr";
+            case node_kind::default_init:       return "default_init";
+            case node_kind::bit_expr:           return "bit_expr";
+            case node_kind::primitive_type:     return "primitive_type";
+            case node_kind::named_type:         return "named_type";
         }
         return "unknown";
     }

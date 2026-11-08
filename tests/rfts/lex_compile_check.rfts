@@ -1,4 +1,5 @@
 
+// MODE: lex
 // EXIT: 0
 // The canonical minimal program; must lex cleanly from M1 onwards.
 

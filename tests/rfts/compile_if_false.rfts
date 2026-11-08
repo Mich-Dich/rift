@@ -1,0 +1,11 @@
+
+// MODE: compile
+// EXIT: 1
+
+u32 main() {
+    if (false) {
+        return 0u32;
+    } else {
+        return 1u32;
+    }
+}

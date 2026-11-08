@@ -1,0 +1,12 @@
+
+// MODE: check
+// EXIT: 1
+// EXPECT_STDERR_CONTAINS: function 'add' expects 2 arguments
+
+u32 add(u32 a, u32 b) {
+    return a + b;
+}
+
+u32 main() {
+    return add(1u32);
+}

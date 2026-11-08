@@ -13,6 +13,8 @@ add_test(
     COMMAND rift_lexer_tests
 )
 
+
+# parser ---------------------------------------------------------------------------------------------------------------
 add_executable(rift_parser_tests
     parser_tests.cpp
 )
@@ -23,6 +25,33 @@ add_test(
     NAME parser_tests
     COMMAND rift_parser_tests
 )
+
+
+# sema -----------------------------------------------------------------------------------------------------------------
+add_executable(rift_sema_tests
+    sema_tests.cpp
+)
+target_link_libraries(rift_sema_tests PRIVATE librift)
+target_include_directories(rift_sema_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+    NAME sema_tests
+    COMMAND rift_sema_tests
+)
+
+
+# codegen --------------------------------------------------------------------------------------------------------------
+add_executable(rift_codegen_tests
+    codegen_tests.cpp
+)
+target_link_libraries(rift_codegen_tests PRIVATE librift)
+target_include_directories(rift_codegen_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+    NAME codegen_tests
+    COMMAND rift_codegen_tests
+)
+
 
 # Python end-to-end tests ----------------------------------------------------------------------------------------------
 add_test(

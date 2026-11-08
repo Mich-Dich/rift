@@ -268,6 +268,135 @@ TEST(parse_error_empty_expr) {
     EXPECT_TRUE(r.diag->has_errors());
 }
 
+TEST(parse_if_stmt) {
+    auto r = parse_source("u32 main() { if (true) { return 0u32; } return 1u32; }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    EXPECT_EQ(blk.statements.size(), 2u);
+    const auto& iff = r.p->arena().get_as<if_stmt_node>(blk.statements[0]);
+    EXPECT_TRUE(r.p->arena().holds<bool_literal_node>(iff.condition));
+    EXPECT_FALSE(iff.else_block.is_valid());
+}
+
+TEST(parse_if_else) {
+    auto r = parse_source(
+        "u32 main() {\n"
+        "    if (true) { return 0u32; } else { return 1u32; }\n"
+        "}");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    const auto& iff = r.p->arena().get_as<if_stmt_node>(blk.statements[0]);
+    EXPECT_TRUE(iff.else_block.is_valid());
+    EXPECT_TRUE(r.p->arena().holds<block_node>(iff.else_block));
+}
+
+TEST(parse_if_else_if_chain) {
+    auto r = parse_source(
+        "u32 main() {\n"
+        "    if (true) { return 0u32; }\n"
+        "    else if (false) { return 1u32; }\n"
+        "    else { return 2u32; }\n"
+        "}");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    const auto& iff = r.p->arena().get_as<if_stmt_node>(blk.statements[0]);
+    EXPECT_TRUE(r.p->arena().holds<if_stmt_node>(iff.else_block));
+}
+
+TEST(parse_while) {
+    auto r = parse_source("u32 main() { while (false) { } return 0u32; }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    EXPECT_EQ(blk.statements.size(), 2u);
+    EXPECT_TRUE(r.p->arena().holds<while_stmt_node>(blk.statements[0]));
+}
+
+TEST(parse_assign) {
+    auto r = parse_source("u32 main() { mut u32 x = 0u32; x = 5u32; return x; }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    EXPECT_EQ(blk.statements.size(), 3u);
+    EXPECT_TRUE(r.p->arena().holds<assign_stmt_node>(blk.statements[1]));
+}
+
+TEST(parse_bool_literals) {
+    auto r = parse_source("u32 main() { bool a = true; bool b = false; return 0u32; }");
+    EXPECT_FALSE(r.diag->has_errors());
+}
+
+TEST(parse_error_if_missing_paren) {
+    auto r = parse_source("u32 main() { if true { } return 0u32; }");
+    EXPECT_TRUE(r.diag->has_errors());
+}
+
+TEST(parse_error_while_missing_body) {
+    auto r = parse_source("u32 main() { while (false) return 0u32; }");
+    EXPECT_TRUE(r.diag->has_errors());
+}
+
+TEST(parse_call_no_args) {
+    auto r = parse_source("u32 f() { return 0u32; } u32 main() { return f(); }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& main_fn = r.p->arena().get_as<function_node>(prog.declarations[1]);
+    const auto& blk = r.p->arena().get_as<block_node>(main_fn.body);
+    const auto& ret = r.p->arena().get_as<return_stmt_node>(blk.statements[0]);
+    EXPECT_TRUE(r.p->arena().holds<call_expr_node>(ret.value));
+}
+
+TEST(parse_call_with_args) {
+    auto r = parse_source("u32 main() { return add(1u32, 2u32); }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    const auto& ret = r.p->arena().get_as<return_stmt_node>(blk.statements[0]);
+    const auto& call = r.p->arena().get_as<call_expr_node>(ret.value);
+    EXPECT_EQ(call.args.size(), 2u);
+}
+
+TEST(parse_call_nested) {
+    auto r = parse_source("u32 main() { return f(g(1u32)); }");
+    EXPECT_FALSE(r.diag->has_errors());
+}
+
+TEST(parse_default_init) {
+    auto r = parse_source("u32 main() { u32 x = default; return x; }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    const auto& v = r.p->arena().get_as<var_decl_node>(blk.statements[0]);
+    EXPECT_TRUE(r.p->arena().holds<default_init_node>(v.initializer));
+}
+
+TEST(parse_bit_expr) {
+    auto r = parse_source("u32 main() { return bit(3u32); }");
+    EXPECT_FALSE(r.diag->has_errors());
+    const auto& prog = r.p->arena().get_as<program_node>(r.program);
+    const auto& fn = r.p->arena().get_as<function_node>(prog.declarations[0]);
+    const auto& blk = r.p->arena().get_as<block_node>(fn.body);
+    const auto& ret = r.p->arena().get_as<return_stmt_node>(blk.statements[0]);
+    EXPECT_TRUE(r.p->arena().holds<bit_expr_node>(ret.value));
+}
+
+TEST(parse_error_bit_missing_paren) {
+    auto r = parse_source("u32 main() { return bit 3u32; }");
+    EXPECT_TRUE(r.diag->has_errors());
+}
+
+
+
 int main() {
     return test::run_all();
 }

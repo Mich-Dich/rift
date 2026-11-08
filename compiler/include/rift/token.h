@@ -65,6 +65,7 @@ namespace rift {
         // Keywords — control flow
         kw_if,
         kw_else,
+        kw_while,
         kw_match,
         kw_for,
         kw_in,
