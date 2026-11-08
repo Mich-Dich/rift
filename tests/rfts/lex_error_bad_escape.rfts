@@ -1,0 +1,5 @@
+
+// EXIT: 1
+// EXPECT_STDERR_CONTAINS: unknown escape sequence
+
+std::str message = "bad \q escape";

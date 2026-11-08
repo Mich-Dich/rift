@@ -1,0 +1,7 @@
+
+// EXIT: 0
+// The canonical minimal program; must lex cleanly from M1 onwards.
+
+u32 main() {
+    return 0u32;
+}

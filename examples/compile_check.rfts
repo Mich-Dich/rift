@@ -1,0 +1,7 @@
+
+// A minimal program that exercises M4's codegen target. Once the compiler reaches M4, 
+// `riftc compile examples/compile_check.rfts -o compile_check` should produce a binary that exits 0
+
+u32 main() {
+    return 0u32;
+}
