@@ -5,12 +5,17 @@ usage: riftc <command> [options] [file]
 
 commands:
   lex <file>        print the token stream of a .rifts/.rifth file
-  check <file>      check a file for errors (currently: lexing)
+  parse <file>      print the syntax tree of one file
+  check <file>      check a module and everything it imports
+  symbols <file>    print the module's merged symbol table (header + source)
+  typed <file>      print the syntax tree with the type of every expression
   explain [code]    describe a diagnostic code, or list all codes
 
 options:
   --diagnostic-format=human|short   diagnostic layout (default: human)
   --color=auto|always|never         colored diagnostics (default: auto)
+  --root=DIR                        project root for imports (default: the file's directory)
+  --stop-after=lex|parse|resolve|types  stop 'check' after a phase
   -h, --help                        show this help
   -V, --version                     show the compiler version
 

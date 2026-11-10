@@ -1,0 +1,13 @@
+// feature 02: integers and raw pointers convert to bool in conditions only.
+import std;
+void conditions(u32 count, u32 flags, f64 ratio, std::raw_ptr<u8> ptr, char c) {
+    if (count) { }
+    if (flags & bit(4)) { }
+    while (ptr) { }
+    if (!count) { }
+    if (count && ptr) { }
+    bool both = count != 0 && flags != 0;
+    if (ratio) { }                  //~ error[E4012]: 'f64' does not convert to bool
+    if (c) { }                      //~ error[E4012]: 'char'
+    while (ratio > 0.0 || ratio) { }  //~ error[E4012]
+}

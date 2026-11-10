@@ -1,0 +1,41 @@
+// feature 14: template declarations and uses.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+template<type T>
+T larger(T a, T b) {
+    return if (a > b) { a } else { b };
+}
+
+template<type T, usize N>
+struct array {
+    T first;
+}
+
+template<type K, type V>
+class hash_map { }
+
+template<type T : std::comparable & std::cloneable>
+T pick(T a) { return a; }
+
+void uses(u32 a, u32 b) {
+    u32 m = larger(a, b);
+    u32 n = larger<u32>(3, 4);
+    bool less_than = a < b;
+    bool both = a < b && b > a;
+    std::darray<std::darray<u32>> nested = default;
+    std::result<std::darray<employee>, std::io_error> r = load();
+    std::array<u8, 16> bytes = default;
+    std::array<u8, buffer_size> buffer = default;
+    std::array<u8, 4 * 4> computed = default;
+    std::function<u32(u32, u32)> callback = make();
+    std::raw_ptr<mut u8> raw = nullptr;
+    std::string s = std::format(f"{a}");
+}
+
+template<type T>
+std::string describe(T value) {
+    if compile_time (std::is_integer<T>()) {
+        return std::format(f"integer {value}");
+    } else {
+        return std::string::from("something else");
+    }
+}

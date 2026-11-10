@@ -1,0 +1,23 @@
+// feature 05/06: T{ .field = value } names existing fields once; fields without a default are required.
+struct employee {
+    u32 id;
+    u32 age    = 0;
+    f64 salary = 0.0;
+
+    static employee with_id(u32 id) {
+        return employee{ .id = id };
+    }
+    bool is_senior() {
+        return this.age >= 30;
+    }
+}
+
+void build() {
+    employee a = employee{ .id = 1, .age = 41 };
+    employee b = employee{ .salary = 1.0, .id = 2 };     // any order
+    employee c = employee::with_id(3);
+    employee d = employee{ .age = 3 };                   //~ error[E3035]: missing field 'id'
+    employee e = employee{ .id = 1, .agee = 2 };         //~ error[E3033]: no field 'agee'
+    employee f = employee{ .id = 1, .id = 2 };           //~ error[E3034]: given twice
+    bool s = employee::is_senior();                      //~ error[E3038]: not static
+}

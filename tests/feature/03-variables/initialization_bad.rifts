@@ -1,0 +1,10 @@
+// feature 03: '=' is the only way to initialize, and every variable is initialized.
+u32 global = 0;                  //~ error[E2012]: needs 'static' or 'compile_time'
+const u32 limit = 5;             //~ error[E2019]: 'const' is not a keyword
+
+void f() {
+    u32 z;                       //~ error[E2010]: has no initial value
+    test t2{ .x = 5 };           //~ error[E2011]: initialize 't2' with '='
+    test t3(5);                  //~ error[E2011]
+    u32 ok = 1;
+}

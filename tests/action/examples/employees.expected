@@ -1,3 +1,11 @@
 exit: 0
 --- stdout
 --- stderr
+warning[W4002]: implicit allocation of a std::string from a string literal
+ --> examples/employees.rifts:8:26
+  |
+8 |     std::string name   = "";
+  |                          ^^ allocates
+  = note: write 'std::string::from("...")' to make the allocation visible
+
+0 errors, 1 warning

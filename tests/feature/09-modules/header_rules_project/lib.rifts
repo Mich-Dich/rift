@@ -1,0 +1,25 @@
+private u32 hidden() { return 0; }
+u32 mismatch(u64 x) { return 0; }      //~ error[E3014]: does not match its header declaration
+u64 wrong_return(u32 x) { return 0; }  //~ error[E3014]: return type 'u32' vs 'u64'
+u32 not_in_header() { return 0; }      //~ error[E3017]: not declared in the header
+
+struct data {
+    u32 b = 0;                         //~ error[E3016]: cannot add field 'b'
+    u32 size() { return this.a; }
+    u32 extra() { return 0; }          //~ error[E3015]: not declared in the header
+}
+
+class box {
+public:
+    u32 get() { return this.secret; }
+    void set(u32 v) { this.secret = v; }   //~ error[E3014]: does not match
+    u32 added() { return 1; }          //~ error[E3015]
+private:
+    u32 secret = 0;
+    u32 helper() { return 2; }
+}
+
+enum color : u8 { red, green }         //~ error[E3018]: already complete in the header
+static u32 global = 1;                 //~ error[E3010]: already defined in the header
+private u32 dup() { return 0; }
+private u32 dup() { return 1; }        //~ error[E3010]: defined twice with the same parameters

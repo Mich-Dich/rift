@@ -4,6 +4,12 @@ add_library(rift STATIC
     src/diagnostics.cpp
     src/token.cpp
     src/lexer.cpp
+    src/parser.cpp
+    src/ast_printer.cpp
+    src/modules.cpp
+    src/resolve.cpp
+    src/types.cpp
+    src/check.cpp
     src/driver.cpp
 )
 target_include_directories(rift PUBLIC include)

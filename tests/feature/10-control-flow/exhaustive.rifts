@@ -1,0 +1,50 @@
+// feature 10: match must be exhaustive; arms after a catch-all never run.
+import std;
+
+enum color : u8 { red, green, blue }
+enum token : u8 { number(f64), end }
+
+std::result<u32, color> parse(u32 x) { return std::ok(x); }
+
+void matches(color c, token t, u32 n, bool b) {
+    u32 a = match (c) {             //~ error[E4060]: does not cover color::blue
+        color::red => 1,
+        color::green => 2,
+    };
+    u32 d = match (c) {
+        color::red => 1,
+        _ => 2,
+    };
+    u32 e = match (n) {             //~ error[E4060]: does not cover every value
+        0 => 1,
+        1..=9 => 2,
+    };
+    u32 f = match (b) {
+        true => 1,
+        false => 0,
+    };
+    u32 g = match (t) {             //~ error[E4060]: token::number
+        token::number(x) if x > 1.0 => 1,
+        token::end => 0,
+    };
+    u32 h = match (parse(n)) {
+        std::ok(v) => v,
+        std::error(_) => 0,
+    };
+    u32 i = match (parse(n)) {      //~ error[E4060]: std::error
+        std::ok(v) => v,
+    };
+    u32 j = match (n) {
+        _ => 1,
+        5 => 2,                     //~ warning[W4001]: can never match
+    };
+    u32 k = match (c) {
+        color::red => 1,
+        token::end => 2,            //~ error[E4061]: alternative of 'token'
+        _ => 3,
+    };
+    u32 l = match (n) {
+        'a' => 1,                   //~ error[E4061]: 'char'
+        _ => 0,
+    };
+}

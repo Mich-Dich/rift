@@ -1,0 +1,29 @@
+// feature 03: scopes. Sibling scopes may reuse a name; nothing is visible before it is declared.
+static u32 counter_start = 10;
+compile_time u32 limit = 100;
+
+u32 sum(u32 n) {
+    mut u32 total = counter_start;
+    for (u32 i : 0..n) {
+        u32 doubled = i * 2;
+        total += doubled;
+    }
+    for (u32 i : 0..n) {              // a new 'i' in a sibling scope
+        u32 doubled = i;
+        total += doubled;
+    }
+    {
+        u32 inner = total;
+        total = inner + limit;
+    }
+    {
+        u32 inner = 1;                 // sibling block: fine
+        total += inner;
+    }
+    u32 result = match (total) {
+        0 => 0,
+        x if x > 10 => x,
+        x => x + 1,                    // each arm has its own scope
+    };
+    return result;
+}

@@ -1,0 +1,14 @@
+// feature 17: every cast spelling.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+void casts(u32 small, shape& some_shape) {
+    u64 wide  = cast<u64>(small);
+    u8  b     = cast::truncate<u8>(small);
+    u8  c     = cast::saturate<u8>(small);
+    std::option<u8> d = cast::checked<u8>(small);
+    i32 e     = cast::saturate<i32>(3.9);
+    f32 g     = cast::round<f32>(1.0);
+    std::option<circle&> f = cast::dynamic<circle&>(some_shape);
+    unsafe {
+        usize bits = cast::reinterpret<usize>(ptr);
+    }
+}

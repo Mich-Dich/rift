@@ -1,9 +1,15 @@
 #include "rift/driver.hpp"
 
+#include "rift/ast_printer.hpp"
+#include "rift/check.hpp"
 #include "rift/diagnostics.hpp"
 #include "rift/lexer.hpp"
+#include "rift/modules.hpp"
+#include "rift/parser.hpp"
+#include "rift/resolve.hpp"
 #include "rift/source.hpp"
 
+#include <filesystem>
 #include <format>
 #include <optional>
 #include <ostream>
@@ -22,22 +28,31 @@ constexpr std::string_view usage_text =
     "\n"
     "commands:\n"
     "  lex <file>        print the token stream of a .rifts/.rifth file\n"
-    "  check <file>      check a file for errors (currently: lexing)\n"
+    "  parse <file>      print the syntax tree of one file\n"
+    "  check <file>      check a module and everything it imports\n"
+    "  symbols <file>    print the module's merged symbol table (header + source)\n"
+    "  typed <file>      print the syntax tree with the type of every expression\n"
     "  explain [code]    describe a diagnostic code, or list all codes\n"
     "\n"
     "options:\n"
     "  --diagnostic-format=human|short   diagnostic layout (default: human)\n"
     "  --color=auto|always|never         colored diagnostics (default: auto)\n"
+    "  --root=DIR                        project root for imports (default: the file's directory)\n"
+    "  --stop-after=lex|parse|resolve|types  stop 'check' after a phase\n"
     "  -h, --help                        show this help\n"
     "  -V, --version                     show the compiler version\n"
     "\n"
     "exit codes: 0 success, 1 errors in input, 2 bad command line, 3 internal error\n";
+
+enum class Phase { lex, parse, resolve, types };
 
 struct Options {
     std::string_view command;
     std::string_view input;
     RenderOptions    render;
     bool             color_auto = true;
+    std::string      root;
+    Phase            stop_after = Phase::types;
 };
 
 ExitCode usage_error(DriverStreams& s, std::string_view message) {
@@ -59,6 +74,16 @@ std::optional<ExitCode> parse_options(std::span<const std::string_view> args, Op
             opts.render.color = false, opts.color_auto = false;
         } else if (arg == "--color=auto") {
             opts.color_auto = true;
+        } else if (arg.starts_with("--root=")) {
+            opts.root = std::string(arg.substr(7));
+        } else if (arg == "--stop-after=lex") {
+            opts.stop_after = Phase::lex;
+        } else if (arg == "--stop-after=parse") {
+            opts.stop_after = Phase::parse;
+        } else if (arg == "--stop-after=resolve") {
+            opts.stop_after = Phase::resolve;
+        } else if (arg == "--stop-after=types") {
+            opts.stop_after = Phase::types;
         } else if (arg.starts_with("-") && arg != "-") {
             return usage_error(s, std::format("unknown option '{}'", arg));
         } else if (opts.input.empty()) {
@@ -129,23 +154,55 @@ ExitCode run_frontend(const Options& opts, DriverStreams& s) {
         return ExitCode::compile_error;
     }
 
-    SourceManager sources;
-    std::string   reason;
-    std::optional<FileId> id = sources.load(input, reason);
-    if (!id) {
-        s.err << std::format("riftc: error[E0001]: cannot read '{}': {}\n", input, reason);
+    SourceManager    sources;
+    DiagnosticEngine diags;
+
+    if (opts.command == "lex" || opts.command == "parse" || opts.stop_after == Phase::lex) {
+        // Single-file commands: no imports are followed.
+        std::string           reason;
+        std::optional<FileId> id = sources.load(input, reason);
+        if (!id) {
+            s.err << std::format("riftc: error[E0001]: cannot read '{}': {}\n", input, reason);
+            return ExitCode::compile_error;
+        }
+        const SourceFile&  file   = sources.file(*id);
+        std::vector<Token> tokens = tokenize(file, *id, diags);
+        if (opts.command == "lex") {
+            dump_tokens(s.out, file, tokens);
+        } else if (!diags.has_errors() && opts.stop_after != Phase::lex) {
+            ast::File tree = parse(file, *id, tokens, diags);
+            ast::print(s.out, tree);
+        }
+        render_all(s.err, diags, sources, opts.render);
+        return diags.has_errors() ? ExitCode::compile_error : ExitCode::success;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(input, ec)) {
+        s.err << std::format("riftc: error[E0001]: cannot read '{}': cannot open file\n", input);
         return ExitCode::compile_error;
     }
-
-    DiagnosticEngine   diags;
-    const SourceFile&  file   = sources.file(*id);
-    std::vector<Token> tokens = tokenize(file, *id, diags);
-
-    if (opts.command == "lex") {
-        dump_tokens(s.out, file, tokens);
+    // Each phase only runs on input the previous phase accepted, so errors don't cascade.
+    sema::Program program = load_program(input, LoadOptions{opts.root}, sources, diags);
+    bool resolved = false;
+    bool typed    = false;
+    if (!diags.has_errors() && opts.stop_after >= Phase::resolve) {
+        resolve_program(program, diags);
+        resolved = true;
     }
-    // Future phases (parse, resolve, type-check, ...) plug in here for `check`.
-
+    if (!diags.has_errors() && opts.stop_after >= Phase::types) {
+        check_types(program, diags);
+        typed = true;
+    }
+    // Future phases (ownership, code generation) plug in here.
+    if (opts.command == "symbols" && resolved && program.entry) {
+        print_symbols(s.out, *program.entry, sources);
+    }
+    if (opts.command == "typed" && typed && program.entry) {
+        if (program.entry->header) ast::print(s.out, program.entry->header->ast, true);
+        if (program.entry->source) ast::print(s.out, program.entry->source->ast, true);
+    }
+    diags.sort_by_location();
     render_all(s.err, diags, sources, opts.render);
     return diags.has_errors() ? ExitCode::compile_error : ExitCode::success;
 }
@@ -191,7 +248,7 @@ ExitCode run_driver(std::span<const std::string_view> args, DriverStreams stream
     if (command == "explain") {
         return run_explain(args.subspan(1), streams);
     }
-    if (command == "lex" || command == "check") {
+    if (command == "lex" || command == "parse" || command == "check" || command == "symbols" || command == "typed") {
         Options opts;
         opts.command = command;
         if (std::optional<ExitCode> failed = parse_options(args.subspan(1), opts, streams)) {

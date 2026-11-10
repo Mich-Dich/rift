@@ -1,0 +1,22 @@
+// feature 02: no implicit numeric conversions, no int->bool outside conditions.
+void take_flag(bool b) { }
+void take_u64(u64 v) { }
+
+void conversions(u32 count, u64 wide, f64 ratio, i32 signed_value) {
+    u64 a = count;                  //~ error[E4010]: expected 'u64', found 'u32'
+    u32 b = wide;                   //~ error[E4010]: expected 'u32', found 'u64'
+    u32 c = count + wide;           //~ error[E4011]: different types: 'u32' and 'u64'
+    f64 d = ratio * count;          //~ error[E4011]
+    bool e = count;                 //~ error[E4010]: expected 'bool', found 'u32'
+    take_flag(count);               //~ error[E4010]
+    take_u64(count);                //~ error[E4010]
+    u32 f = signed_value;           //~ error[E4010]
+    u8 g = 256;                     //~ error[E4002]: 256 does not fit in 'u8'
+    u32 h = -1;                     //~ error[E4002]: -1 does not fit in 'u32'
+    u8 i = 300u8;                   //~ error[E4002]
+    i8 j = -129;                    //~ error[E4002]
+    f64 k = 0;                      //~ error[E4003]: integer literal used as 'f64'
+    u32 l = 1.5;                    //~ error[E4010]
+    u32 m = 'a';                    //~ error[E4010]
+    u32 n = "text";                 //~ error[E4010]
+}

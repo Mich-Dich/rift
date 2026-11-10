@@ -1,0 +1,2 @@
+import a;                              //~ error[E3002]: import cycle: a -> b -> a
+u32 fb() { return 0; }

@@ -1,0 +1,132 @@
+exit: 1
+--- stdout
+--- stderr
+error[E3011]: function 'with_body' has a body in a header
+ --> tests/feature/09-modules/header_rules_project/lib.rifth:2:17
+  |
+2 | u32 with_body() { return 1; }          //~ error[E3011]: has a body in a header
+  |                 ^^^^^^^^^^^^^ body
+  = note: declare it here as 'T f(...);' and move the body into the .rifts
+
+error[E3012]: 'hidden' is marked 'private' in a header
+ --> tests/feature/09-modules/header_rules_project/lib.rifth:3:13
+  |
+3 | private u32 hidden();                  //~ error[E3012]: marked 'private' in a header
+  |             ^^^^^^ private item
+  = note: private items live only in the .rifts
+
+error[E3013]: 'never_defined' is declared in the header but never defined
+ --> tests/feature/09-modules/header_rules_project/lib.rifth:4:5
+  |
+4 | u32 never_defined();                   //~ error[E3013]: never defined
+  |     ^^^^^^^^^^^^^ no definition
+  = note: define it in the module's .rifts
+
+error[E3012]: 'box::no_section' is private in a header
+  --> tests/feature/09-modules/header_rules_project/lib.rifth:14:9
+   |
+14 |     u32 no_section;                    //~ error[E3012]: private in a header
+   |         ^^^^^^^^^^ private member
+   = note: class members in a header go under 'public:' or 'protected:'
+
+error[E3013]: 'box::undefined_method' is declared in the header but never defined
+  --> tests/feature/09-modules/header_rules_project/lib.rifth:18:9
+   |
+18 |     u32 undefined_method();            //~ error[E3013]: 'box::undefined_method'
+   |         ^^^^^^^^^^^^^^^^ no definition
+   = note: define it in the module's .rifts
+
+error[E3014]: 'mismatch(u64)' does not match its header declaration
+ --> tests/feature/09-modules/header_rules_project/lib.rifts:2:5
+  |
+2 | u32 mismatch(u64 x) { return 0; }      //~ error[E3014]: does not match its header declaration
+  |     ^^^^^^^^ different parameters
+ ::: tests/feature/09-modules/header_rules_project/lib.rifth:5:5
+  |
+5 | u32 mismatch(u32 x);
+  |     --------
+  = note: the header declares 'mismatch(u32)'
+
+error[E3014]: 'wrong_return' differs from its header declaration: return type 'u32' vs 'u64'
+ --> tests/feature/09-modules/header_rules_project/lib.rifts:3:5
+  |
+3 | u64 wrong_return(u32 x) { return 0; }  //~ error[E3014]: return type 'u32' vs 'u64'
+  |     ^^^^^^^^^^^^ differs from the header
+ ::: tests/feature/09-modules/header_rules_project/lib.rifth:6:5
+  |
+6 | u32 wrong_return(u32 x);
+  |     ------------
+  = note: declared in the header here
+
+error[E3017]: function 'not_in_header' is not declared in the header
+ --> tests/feature/09-modules/header_rules_project/lib.rifts:4:5
+  |
+4 | u32 not_in_header() { return 0; }      //~ error[E3017]: not declared in the header
+  |     ^^^^^^^^^^^^^ not in the .rifth
+  = note: mark it 'private' if it is local to this module, or declare it in the .rifth
+
+error[E3016]: struct 'data' cannot add field 'b' in its .rifts block
+ --> tests/feature/09-modules/header_rules_project/lib.rifts:7:9
+  |
+7 |     u32 b = 0;                         //~ error[E3016]: cannot add field 'b'
+  |         ^ new field
+  = note: all fields of a struct are declared in the header
+
+error[E3015]: 'data::extra' is not declared in the header
+ --> tests/feature/09-modules/header_rules_project/lib.rifts:9:9
+  |
+9 |     u32 extra() { return 0; }          //~ error[E3015]: not declared in the header
+  |         ^^^^^ not in the .rifth
+  = note: declare every method of a struct in its .rifth block
+
+error[E3014]: 'box::set(u32)' does not match its header declaration
+  --> tests/feature/09-modules/header_rules_project/lib.rifts:15:10
+   |
+15 |     void set(u32 v) { this.secret = v; }   //~ error[E3014]: does not match
+   |          ^^^ different parameters
+  ::: tests/feature/09-modules/header_rules_project/lib.rifth:17:10
+   |
+17 |     void set(u32 v) mut;
+   |          ---
+   = note: the header declares 'box::set(u32) mut'
+
+error[E3015]: 'box::added' is not declared in the header
+  --> tests/feature/09-modules/header_rules_project/lib.rifts:16:9
+   |
+16 |     u32 added() { return 1; }          //~ error[E3015]
+   |         ^^^^^ not in the .rifth
+   = note: declare it under 'public:' in the .rifth, or move it under 'private:'
+
+error[E3018]: 'color' is already complete in the header
+  --> tests/feature/09-modules/header_rules_project/lib.rifts:22:6
+   |
+22 | enum color : u8 { red, green }         //~ error[E3018]: already complete in the header
+   |      ^^^^^ defined again
+  ::: tests/feature/09-modules/header_rules_project/lib.rifth:21:6
+   |
+21 | enum color : u8 { red, green }
+   |      -----
+   = note: enums and interfaces are written only in the .rifth
+
+error[E3010]: 'global' is already defined in the header
+  --> tests/feature/09-modules/header_rules_project/lib.rifts:23:12
+   |
+23 | static u32 global = 1;                 //~ error[E3010]: already defined in the header
+   |            ^^^^^^ defined again
+  ::: tests/feature/09-modules/header_rules_project/lib.rifth:22:12
+   |
+22 | static u32 global = 0;
+   |            ------
+   = note: header definition here
+
+error[E3010]: 'dup' is defined twice with the same parameters
+  --> tests/feature/09-modules/header_rules_project/lib.rifts:25:13
+   |
+25 | private u32 dup() { return 1; }        //~ error[E3010]: defined twice with the same parameters
+   |             ^^^ duplicate
+   |
+24 | private u32 dup() { return 0; }
+   |             ---
+   = note: first definition here
+
+15 errors, 0 warnings

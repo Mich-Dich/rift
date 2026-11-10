@@ -1,0 +1,12 @@
+// feature 02/03/16: without context an untyped value is an error, never a silent i32.
+void no_context() {
+    auto a = 5;                     //~ error[E4001]: no type
+    auto b = 1.5;                   //~ error[E4001]
+    auto c = bit(4);                //~ error[E4001]: 'bit(n)' has no type
+    auto d = default;               //~ error[E4001]: 'default' has no type
+    if (3 < 4) { }                  //~ error[E4001]: both sides of the comparison are untyped
+    if (1) { }                      //~ error[E4001]
+    if (bit(4)) { }                 //~ error[E4001]
+    auto e = 5u32;
+    auto f = 1.5f64;
+}

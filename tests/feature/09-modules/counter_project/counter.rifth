@@ -1,0 +1,14 @@
+// feature 09: the spec's counter module (spec 06), header part.
+class counter {
+public:
+    u32  get();
+    void inc() mut;
+    static counter starting_at(u32 value);
+    ~counter();
+}
+
+enum mode : u8 { up, down }
+
+compile_time u32 default_step = 1;
+
+u32 twice(u32 x);

@@ -1,0 +1,30 @@
+// RUN: riftc parse %s
+import std::filesystem;
+
+/// A documented constant.
+compile_time usize buffer_size = 4096;
+private static mut u32 counter = 0;
+
+template<type T : std::comparable & std::cloneable, usize N>
+open view struct pair : printable {
+    T first;
+    T second = default;
+    bool operator==(pair& other) = default;
+    std::string to_text() override;
+}
+
+class counter {
+public:
+    static counter make(u32 start);
+    void inc() mut;
+    ~counter();
+private:
+    u32 value = 0;
+}
+
+enum shape : u8 { circle(f64), square(f64), empty }
+
+extern "C" i32 puts(std::raw_ptr<u8> text);
+unsafe u32 peek(usize address);
+compile_time run_time u32 clamp(u32 x, mut u32& lo, u32& hi);
+template<type T> deduce twice(T x);

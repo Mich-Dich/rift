@@ -1,0 +1,15 @@
+// feature 11: results must be used.
+import std;
+
+enum io_error : u8 { closed }
+
+std::result<u32, io_error> write(u32 x) { return std::ok(x); }
+
+void use_results() {
+    write(1);                       //~ error[E4150]: is ignored
+    _ = write(2);
+    u32 n = match (write(3)) {
+        std::ok(v) => v,
+        std::error(_) => 0,
+    };
+}

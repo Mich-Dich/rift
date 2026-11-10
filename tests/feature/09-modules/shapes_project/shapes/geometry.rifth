@@ -1,0 +1,6 @@
+struct point {
+    f64 x = 0.0;
+    f64 y = 0.0;
+}
+
+compile_time f64 pi = 3.14159;

@@ -1,0 +1,39 @@
+// feature 07: open classes, virtual/abstract/override, interfaces.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+open class shape {
+public:
+    std::string name;
+    virtual f64 area() abstract;
+    virtual std::string describe();
+}
+
+class circle : shape, std::formattable {
+public:
+    f64 radius = 0.0;
+    f64 area() override;
+    std::string describe() override {
+        return this.shape::describe();
+    }
+}
+
+open class ring : circle { }
+
+interface printable {
+    std::string to_text();
+}
+
+interface solid : shape_like {
+    f64 volume();
+    void scale(f64 factor) mut;
+}
+
+void print_all(std::span<std::unique_ptr<printable>> items) {
+    for (std::unique_ptr<printable>& item : items) {
+        std::println(item->to_text());
+    }
+}
+
+template<type T : printable>
+void print_one(T& item) {
+    std::println(item.to_text());
+}

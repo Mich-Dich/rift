@@ -1,0 +1,12 @@
+exit: 0
+--- stdout
+(fn f -> u64
+  (param a : u32)
+  (param b : u64)
+  (block
+    (var x : u64 (+ : u64 (path b : u64) (int 1 : u64)))
+    (var small : u8 (int 255 : u8))
+    (var c : bool (< : bool (path a : u32) (int 10 : u32)))
+    (var h : f64 (/ : f64 (float 1.0 : f64) (float 2.0 : f64)))
+    (return : never (+ : u64 (path x : u64) (cast u64 : u64 (path a : u32))))))
+--- stderr

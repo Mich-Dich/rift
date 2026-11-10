@@ -1,0 +1,8 @@
+// feature 10: range bounds take the loop variable's type.
+void loops(u32 n, u64 m) {
+    for (u32 i : 0..n) { }
+    for (u8 b : 0..=255) { }
+    for (u8 c : 0..=256) { }        //~ error[E4002]
+    for (u64 j : 0..n) { }          //~ error[E4010]
+    for (u32 k : n..m) { }          //~ error[E4011]
+}

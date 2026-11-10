@@ -17,5 +17,123 @@ E1012  error    integer literal is too large
 E1013  error    float suffix on an integer literal
 E1014  error    missing digits in float exponent
 E1015  error    source is not valid UTF-8
+E2001  error    unexpected token
+E2002  error    expected an expression
+E2003  error    expected a type
+E2004  error    expected a declaration
+E2005  error    braces are required around this body
+E2006  error    assignment is a statement, not an expression
+E2007  error    Rift has no '++' or '--' operator
+E2008  error    comparison and range operators cannot be chained
+E2009  error    no ';' after a closing '}'
+E2010  error    variable declared without an initializer
+E2011  error    variables are initialized with '='
+E2012  error    file-scope variable needs 'static' or 'compile_time'
+E2013  error    out-of-line definitions are not allowed
+E2014  error    match arm must end with ','
+E2015  error    C-style 'for' loops do not exist
+E2016  error    unclosed delimiter
+E2017  error    struct construction must name its fields
+E2018  error    'run_time' on its own is the default and is not written
+E2019  error    keyword removed from the language
+E2020  error    'if' used as a value needs an 'else' branch
+E2021  error    not allowed in a struct
+E2022  error    structs cannot have a destructor
+E2023  error    'virtual' and 'override' cannot be combined
+E2024  error    default arguments are not allowed
+E2025  error    'auto' is not allowed in function signatures
+E2026  error    lambda captures must be named
+E2027  error    enum needs an underlying tag type
+E2028  error    interface methods cannot have a body
+E2029  error    '_' can only be used in patterns and in '_ = expr;'
+E3001  error    cannot find module
+E3002  error    import cycle
+E3003  error    module has no header and cannot be imported
+E3004  error    a module does not import itself
+E3010  error    defined more than once
+E3011  error    headers never contain function bodies
+E3012  error    private items do not belong in a header
+E3013  error    declared but never defined
+E3014  error    definition does not match the header declaration
+E3015  error    public member is not declared in the header
+E3016  error    a struct's source block cannot add fields
+E3017  error    item not declared in the header must be 'private'
+E3018  error    enums and interfaces are complete in the header
+E3020  error    cannot find name
+E3021  error    cannot find type
+E3022  error    wrong kind of name (type, value or module)
+E3023  error    module is not imported
+E3024  error    item is private
+E3025  error    no such member or alternative
+E3026  error    members are accessed through 'this.'
+E3027  error    'this' is only available in non-static methods
+E3028  error    name already declared in this function (no shadowing)
+E3030  error    'break' or 'continue' outside a loop
+E3031  error    'mut' marks call arguments and match subjects only
+E3032  error    only local variables and by-value parameters can be moved
+E3033  error    no such field
+E3034  error    field given more than once
+E3035  error    field without a default is missing
+E3036  error    private field set outside its module
+E3037  error    enum alternative used with the wrong payload
+E3038  error    only static methods can be named through the type
+E3040  error    base class is not open
+E3041  error    a class has at most one base class, listed first
+E3042  error    'virtual' and 'abstract' need an open class
+E3043  error    'override' does not match a base method
+E3044  error    method matches a base method but is not marked 'override'
+E3045  error    interface or abstract method is not implemented
+E3046  error    invalid base type
+E3047  error    not a base class of this class
+E3048  error    'abstract' methods are 'virtual' and have no body
+E3049  error    destructor name does not match the class
+E3050  error    lambda uses a local it does not capture
+E4001  error    value has no type from context
+E4002  error    literal does not fit in its type
+E4003  error    an integer literal never becomes a float
+E4010  error    mismatched types
+E4011  error    operands have different types
+E4012  error    type does not convert to bool in a condition
+E4013  error    operator does not apply to this type
+E4014  error    type has no operator==
+E4015  error    unsigned values cannot be negated
+E4020  error    value is not mutable
+E4021  error    'this' cannot change in a non-mut method
+E4022  error    mut method called on an immutable value
+E4023  error    mutable reference argument needs 'mut' at the call site
+E4024  error    'mut' at the call site needs a mutable reference parameter
+E4025  error    cannot assign to this expression
+E4030  error    wrong number of arguments
+E4031  error    ambiguous call
+E4032  error    no overload matches the arguments
+E4033  error    not a function
+E4040  error    'return' needs a value
+E4041  error    void function returns a value
+E4042  error    function may end without returning a value
+E4043  error    function bodies return with 'return'
+E4050  error    branches have different types
+E4060  error    match is not exhaustive
+E4061  error    pattern does not match the type of the match subject
+E4070  error    no such field or method
+E4071  error    member is private
+E4073  error    method used without calling it
+E4074  error    pointer members are accessed with '->'
+E4080  error    shift or bit index out of range
+E4090  error    cast<T> may lose data
+E4091  error    cast does not apply to these types
+E4092  error    unknown cast kind
+E4100  error    raw pointer use requires 'unsafe'
+E4101  error    call to an unsafe function requires 'unsafe'
+E4102  error    access to a 'static mut' requires 'unsafe'
+E4103  error    cast::reinterpret requires 'unsafe'
+E4110  error    invalid return type for main
+E4111  error    invalid parameters for main
+E4120  error    compile_time code calls a run-time function
+E4130  error    enum tag type must be an integer type
+E4140  error    type has no default value
+E4150  error    result must be used
+E4160  error    cannot deduce template argument
 W1001  warning  '/*' inside a block comment (block comments do not nest)
+W4001  warning  unreachable match arm
+W4002  warning  implicit allocation of std::string from a string literal
 --- stderr

@@ -1,0 +1,6 @@
+// feature 08: the tag is an integer type and explicit values must fit in it.
+enum small : u8 {
+    a = 1,
+    b = 300,                        //~ error[E4002]: 300 does not fit in 'u8'
+}
+enum wrong : f64 { x }              //~ error[E4130]

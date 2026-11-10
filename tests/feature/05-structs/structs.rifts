@@ -1,0 +1,37 @@
+// feature 05: structs are plain data with methods.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+struct employee {
+    std::string name;
+    u32         age    = 0;
+    f64         salary = 0.0;
+
+    bool is_senior() {
+        return this.age >= 30;
+    }
+
+    void give_raise(f64 percent) mut {
+        this.salary *= 1.0 + percent / 100.0;
+    }
+
+    static employee nobody() {
+        return employee{ .name = std::string::from("") };
+    }
+
+    bool operator==(employee& other) = default;
+}
+
+struct point : printable {
+    f64 x = 0.0;
+    f64 y = 0.0;
+    std::string to_text() override;
+}
+
+struct empty { }
+
+void use() {
+    mut employee e = employee{ .name = std::string::from("Ann"), .age = 41 };
+    e.give_raise(5.0);
+    bool s = e.is_senior();
+    empty nothing = empty{};
+    point p = point{ .y = 1.0, .x = 2.0, };
+}

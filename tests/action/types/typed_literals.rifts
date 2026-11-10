@@ -1,0 +1,9 @@
+// RUN: riftc typed %s
+// Every expression with its type: literals take the type of their context.
+u64 f(u32 a, u64 b) {
+    u64 x = b + 1;
+    u8 small = 255;
+    bool c = a < 10;
+    f64 h = 1.0 / 2.0;
+    return x + cast<u64>(a);
+}

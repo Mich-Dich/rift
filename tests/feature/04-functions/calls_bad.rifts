@@ -1,0 +1,56 @@
+// feature 04: argument counts, overloads, return values.
+u32 one(u32 x) { return x; }
+u32 over(u32 x) { return x; }
+u32 over(u64 x) { return 0; }
+u32 over(bool b) { return 1; }
+
+template<type T>
+T larger(T a, T b) {
+    return if (a > b) { a } else { b };
+}
+
+void calls(u32 a, u64 b) {
+    u32 r1 = one(1, 2);             //~ error[E4030]: takes 1 argument, but 2 are given
+    u32 r2 = over(5);               //~ error[E4031]: ambiguous
+    u32 r3 = over(5u32);
+    u32 r4 = over(b);
+    u32 r5 = over(true);
+    u32 r6 = over(1.5);             //~ error[E4032]: no overload of 'over' accepts
+    u32 m = larger(a, a);
+    u32 n = larger<u32>(3, 4);
+    u32 o = larger(3, 4);           //~ error[E4160]: cannot deduce template parameter 'T'
+    u64 p = larger(a, a);           //~ error[E4010]: expected 'u64', found 'u32'
+}
+
+u32 no_return_value() {
+    return;                         //~ error[E4040]
+}
+
+void returns_value() {
+    return 5;                       //~ error[E4041]
+}
+
+u32 falls_off(bool c) {             
+    if (c) {
+        return 1;
+    }
+}                                   //~ error[E4042]: may reach its end
+
+u32 implicit_tail() {
+    5                               //~ error[E4043]
+}
+
+u32 all_paths(bool c) {
+    if (c) { return 1; } else { return 2; }
+}
+
+u32 via_match(bool c) {
+    match (c) {
+        true => return 1,
+        false => return 0,
+    }
+}
+
+u32 forever() {
+    while (true) { }
+}

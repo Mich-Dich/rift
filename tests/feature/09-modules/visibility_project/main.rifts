@@ -1,0 +1,16 @@
+import std;
+import lib;
+import other;
+
+void main() {
+    lib::account a = lib::account::open_with(5);
+    lib::account b = lib::account{ .amount = 5 };   //~ error[E3036]: private to module 'lib'
+    lib::locked l = lib::locked{};                   //~ error[E3035]: missing field 'code'
+    u32 s = lib::account::secret();                  //~ error[E3024]: private to module 'lib'
+    u32 f = lib::account::fee();                     //~ error[E3024]
+    u32 h = lib::helper();                           //~ error[E3024]: 'helper' is private
+    u32 x = lib::nothing();                          //~ error[E3020]: cannot find 'nothing' in module 'lib'
+    u32 o = other::other_fn();
+    lib::point p = lib::point{ .x = 1.0 };
+    std::string t = std::string::from("ok");
+}

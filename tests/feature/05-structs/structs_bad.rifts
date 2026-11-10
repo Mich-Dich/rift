@@ -1,0 +1,14 @@
+// feature 05: what a struct may not contain.
+struct with_sections {
+public:                              //~ error[E2021]: structs have no access sections
+    u32 x = 0;
+    mut u32 y = 0;                   //~ error[E2001]: fields have no 'mut' marker
+    virtual void f();                //~ error[E2021]: virtual
+    ~with_sections() { }             //~ error[E2022]
+}
+
+struct trailing { };                 //~ error[E2009]: unnecessary ';'
+
+void build() {
+    employee g = employee{ std::string::from("x"), 1, 2.0 };   //~ error[E2017]
+}

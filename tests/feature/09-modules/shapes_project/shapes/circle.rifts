@@ -1,0 +1,5 @@
+struct circle {
+    f64 area() {
+        return this.radius * this.radius * shapes::geometry::pi;
+    }
+}

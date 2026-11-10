@@ -1,0 +1,25 @@
+// feature 10: if and match values; every branch has the same type, 'never' fits anywhere.
+import std;
+enum token : u8 {
+    number(f64),
+    plus,
+    end,
+}
+
+u32 branches(bool c, u32 x, token t) {
+    u32 a = if (c) { 1 } else { 2 };
+    u32 b = if (c) { x } else { return 0; };
+    u32 bad = if (c) { x } else { true };   //~ error[E4010]: expected 'u32', found 'bool'
+    auto mixed = if (c) { x } else { 1u64 };  //~ error[E4050]
+    f64 v = match (t) {
+        token::number(n) => n,
+        token::plus => 0.0,
+        token::end => 1,                    //~ error[E4003]
+    };
+    std::str label = match (x) {
+        200 => "ok",
+        404 => "not_found",
+        _   => "other",
+    };
+    return a + b;
+}

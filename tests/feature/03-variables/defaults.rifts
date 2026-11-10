@@ -1,0 +1,15 @@
+// feature 03: 'default' needs a type that has a default value.
+import std;
+
+struct with_defaults { u32 a = 0; f64 b = 1.0; }
+struct needs_id { u32 id; u32 age = 0; }
+enum color : u8 { red, green }
+
+void defaults() {
+    u32 n = default;
+    std::darray<u32> v = default;
+    with_defaults w = default;
+    needs_id x = default;           //~ error[E4140]: 'needs_id' has no default value
+    color c = default;              //~ error[E4140]: enum 'color' has no default
+    std::raw_ptr<u8> p = default;
+}

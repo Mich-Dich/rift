@@ -1,0 +1,4 @@
+import missing;                        //~ error[E3001]: cannot find module 'missing'
+import standalone;                     //~ error[E3003]: has no header
+import main;                           //~ error[E3004]: imports itself
+import util::tools;

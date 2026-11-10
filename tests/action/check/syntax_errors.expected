@@ -1,0 +1,29 @@
+exit: 1
+--- stdout
+--- stderr
+error[E2001]: expected ';' after the declaration, found type 'u32'
+ --> tests/action/check/syntax_errors.rifts:5:14
+  |
+5 |     u32 a = 1
+  |              ^ expected ';' here
+
+error[E2001]: expected ')', found ';'
+ --> tests/action/check/syntax_errors.rifts:6:19
+  |
+6 |     u32 b = (2 + 3;
+  |             -     ^ unexpected here
+  = note: to match this '('
+
+error[E2005]: expected '{' after 'if': braces are required
+ --> tests/action/check/syntax_errors.rifts:7:17
+  |
+7 |     if (a == b) a = 1;
+  |                 ^ add '{ ... }' around the body
+
+error[E2009]: unnecessary ';' after the '}' of a struct
+  --> tests/action/check/syntax_errors.rifts:10:24
+   |
+10 | struct s { u32 x = 0; };
+   |                        ^ remove this ';'
+
+4 errors, 0 warnings

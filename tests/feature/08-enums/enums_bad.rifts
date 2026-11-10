@@ -1,0 +1,5 @@
+// feature 08: the tag type is mandatory and there is no ';' after '}'.
+enum color {                         //~ error[E2027]
+    red,
+}
+enum shade : u8 { dark, light };     //~ error[E2009]

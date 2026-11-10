@@ -1,0 +1,22 @@
+// Every rule of spec 09 "what goes where", broken once.
+u32 with_body() { return 1; }          //~ error[E3011]: has a body in a header
+private u32 hidden();                  //~ error[E3012]: marked 'private' in a header
+u32 never_defined();                   //~ error[E3013]: never defined
+u32 mismatch(u32 x);
+u32 wrong_return(u32 x);
+
+struct data {
+    u32 a = 0;
+    u32 size();
+}
+
+class box {
+    u32 no_section;                    //~ error[E3012]: private in a header
+public:
+    u32 get();
+    void set(u32 v) mut;
+    u32 undefined_method();            //~ error[E3013]: 'box::undefined_method'
+}
+
+enum color : u8 { red, green }
+static u32 global = 0;

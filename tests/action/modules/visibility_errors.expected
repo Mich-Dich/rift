@@ -1,0 +1,55 @@
+exit: 1
+--- stdout
+--- stderr
+error[E3036]: field 'amount' is private to module 'lib'
+ --> tests/feature/09-modules/visibility_project/main.rifts:7:37
+  |
+7 |     lib::account b = lib::account{ .amount = 5 };   //~ error[E3036]: private to module 'lib'
+  |                                     ^^^^^^^^^^ cannot be set here
+  = note: outside its module a class's private fields always take their defaults
+
+error[E3035]: missing field 'code' in 'lib::locked{...}'
+ --> tests/feature/09-modules/visibility_project/main.rifts:8:21
+  |
+8 |     lib::locked l = lib::locked{};                   //~ error[E3035]: missing field 'code'
+  |                     ^^^^^^^^^^^ incomplete
+  = note: fields without a default value must be given
+  = note: private fields cannot be set outside their module; give them a default or provide a static factory method
+
+error[E3024]: 'lib::account::secret' is private to module 'lib'
+ --> tests/feature/09-modules/visibility_project/main.rifts:9:27
+  |
+9 |     u32 s = lib::account::secret();                  //~ error[E3024]: private to module 'lib'
+  |                           ^^^^^^ not visible here
+ ::: tests/feature/09-modules/visibility_project/lib.rifts:9:16
+  |
+9 |     static u32 secret() { return 42; }
+  |                ------
+  = note: declared here
+
+error[E3024]: 'lib::account::fee' is protected
+  --> tests/feature/09-modules/visibility_project/main.rifts:10:27
+   |
+10 |     u32 f = lib::account::fee();                     //~ error[E3024]
+   |                           ^^^ not visible here
+   = note: protected members are visible to derived classes only
+  ::: tests/feature/09-modules/visibility_project/lib.rifth:8:16
+   |
+ 8 |     static u32 fee();
+   |                ---
+   = note: declared here
+
+error[E3024]: 'helper' is private to module 'lib'
+  --> tests/feature/09-modules/visibility_project/main.rifts:11:18
+   |
+11 |     u32 h = lib::helper();                           //~ error[E3024]: 'helper' is private
+   |                  ^^^^^^ private
+   = note: only items declared in the module's .rifth can be used from other modules
+
+error[E3020]: cannot find 'nothing' in module 'lib'
+  --> tests/feature/09-modules/visibility_project/main.rifts:12:18
+   |
+12 |     u32 x = lib::nothing();                          //~ error[E3020]: cannot find 'nothing' in module 'lib'
+   |                  ^^^^^^^ not found
+
+6 errors, 0 warnings

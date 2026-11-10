@@ -1,0 +1,23 @@
+// feature 13: smart pointers, raw pointers, unsafe blocks, FFI.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+extern "C" i32 puts(std::raw_ptr<u8> text);
+
+void pointers(std::str message) {
+    std::unique_ptr<circle> c = std::unique_ptr<circle>::make(circle{ .radius = 1.0 });
+    std::shared_ptr<config> s = std::shared_ptr<config>::make(load_config());
+    std::shared_ptr<config> s2 = s.clone();
+    mut u32 value = 5;
+    std::raw_ptr<mut u32> p = mut &value;
+    std::raw_ptr<u32> q = &value;
+    std::raw_ptr<u32> none = nullptr;
+    if (p) {
+        unsafe {
+            *p = 6;
+            std::raw_ptr<mut u32> r = p.offset(1);
+        }
+    }
+    unsafe {
+        i32 written = puts(message.as_ptr());
+    }
+    f64 area = c->radius * (*c).radius;
+}

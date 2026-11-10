@@ -1,0 +1,22 @@
+// feature 08: alternatives are scoped, and payloads are used exactly as declared.
+enum token : u8 {
+    number(f64),
+    plus,
+    end,
+}
+
+f64 value(token t) {
+    token a = token::number(1.5);
+    token b = token::end;
+    token c = token::minus;                  //~ error[E3025]: no alternative 'minus'
+    token d = token::number;                 //~ error[E3037]: carries a value
+    token e = token::plus(1);                //~ error[E3037]: has no payload
+    token f = token{};                       //~ error[E3022]: cannot be constructed
+    return match (t) {
+        token::number(n) => n,
+        token::plus => 0.0,
+        token::end(x) => 0.0,                //~ error[E3037]: has no payload
+        token::number => 1.0,                //~ error[E3037]: carries a value
+        _ => 0.0,
+    };
+}

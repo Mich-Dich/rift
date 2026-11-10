@@ -1,0 +1,10 @@
+// RUN: riftc check %s
+// Parser errors in the human format: pointing at the end of the previous line for a missing ';',
+// and back at the opening delimiter for a mismatched one.
+void f() {
+    u32 a = 1
+    u32 b = (2 + 3;
+    if (a == b) a = 1;
+}
+
+struct s { u32 x = 0; };

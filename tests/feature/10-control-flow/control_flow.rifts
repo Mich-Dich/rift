@@ -1,0 +1,48 @@
+// feature 10: if/else, block values, while, for, match.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+std::str classify(u32 x, u32 count, std::raw_ptr<u8> ptr) {
+    if (ptr) { }
+    if (count > 10) { } else if (count) { } else { }
+    std::str label = if (x > 0) { "positive" } else { "non-positive" };
+    u32 value = { u32 t = 5; t + 1 };
+    while (file.has_more()) {
+        if (done) { break; }
+        continue;
+    }
+    for (employee& e : employees) { }
+    for (mut employee& e : employees) { }
+    for (u32 n : numbers) { }
+    for (usize i : 0..employees.len()) { }
+    for (u8 b : 0..=255) { }
+    return label;
+}
+
+void matching(u32 code, token t, employee e, std::result<u32, error> r) {
+    std::str label = match (code) {
+        200 => "ok",
+        404 => "not_found",
+        0..=99 => "low",
+        x if x > 1000 => "huge",
+        _   => "other",
+    };
+    match (parse_line(line)) {
+        std::ok(e)    => employees.push(move e),
+        std::error(_) => std::eprintln(f"skipping bad line: {line}"),
+    }
+    std::darray<employee> list = match (load(path)) {
+        std::ok(l)    => move l,
+        std::error(err) => {
+            std::eprintln(f"error: {err}");
+            return std::exit_code::failure;
+        },
+    };
+    match (mut e) {
+        employee{ .age = a, .. } => a,
+    }
+    match (c) {
+        'a' => 1,
+        -5 => 2,
+        "text" => 3,
+        true => 4,
+    }
+}

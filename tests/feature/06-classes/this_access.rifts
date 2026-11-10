@@ -1,0 +1,23 @@
+// feature 06: members are always accessed through 'this.', and only methods have a 'this'.
+class counter {
+public:
+    u32 get() {
+        return value;                  //~ error[E3026]: write 'this.value'
+    }
+    void inc() mut {
+        this.value += 1;
+        this.helper();
+        this.vaule += 1;               //~ error[E3025]: 'counter' has no member 'vaule'
+    }
+    static counter make() {
+        u32 v = this.value;            //~ error[E3027]: static methods have no 'this'
+        return counter{};
+    }
+private:
+    u32 value = 0;
+    void helper() { }
+}
+
+u32 free_function() {
+    return this.value;                 //~ error[E3027]: only available inside methods
+}

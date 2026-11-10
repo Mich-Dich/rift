@@ -1,0 +1,17 @@
+// General syntax errors and how the parser recovers from them.
+x = 5;                                   //~ error[E2004]: expected a declaration
+
+void missing_semicolon() {
+    u32 a = 1                            //~ error[E2001]: expected ';'
+    u32 b = 2;
+    u32 c = ;                            //~ error[E2002]: expected an expression
+    u32 d = _;                           //~ error[E2029]
+    if (a = b) { }                       //~ error[E2006]
+    a++;                                 //~ error[E2007]: no '++'
+    b--;                                 //~ error[E2007]: no '--'
+    u32 e = +1;                          //~ error[E2002]: no unary '+'
+}
+
+void still_parsed() {
+    u32 fine = 1;
+}

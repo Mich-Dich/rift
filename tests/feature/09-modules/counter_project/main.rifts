@@ -1,0 +1,13 @@
+// A program using the counter module: everything is fully qualified.
+import std;
+import counter;
+
+std::exit_code main() {
+    mut counter::counter c = counter::counter::starting_at(10);
+    c.inc();
+    counter::counter d = counter::counter{};   // private fields take their defaults
+    counter::mode m = counter::mode::up;
+    u32 t = counter::twice(counter::default_step);
+    std::println(f"{c.get()}");
+    return std::exit_code::success;
+}

@@ -1,0 +1,28 @@
+// feature 06: classes with access sections, mut methods, static factories and destructors.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+class counter {
+public:
+    u32 get() {
+        return this.value;
+    }
+    void inc() mut {
+        this.value += 1;
+    }
+    static counter starting_at(u32 value) {
+        return counter{ .value = value };
+    }
+    ~counter() {
+        std::println(f"counter dropped at {this.value}");
+    }
+protected:
+    u32 step = 1;
+private:
+    u32 value = 0;
+}
+
+std::exit_code main() {
+    mut counter::counter c = counter::counter::starting_at(10);
+    c.inc();
+    std::println(f"{c.get()}");
+    return std::exit_code::success;
+}

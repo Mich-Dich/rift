@@ -1,4 +1,5 @@
 // feature 01: keywords, built-in types and identifiers.
+// STOP-AFTER: parse   (syntax test: names are not declared)
 import std;
 
 compile_time usize buffer_size = 4096;
@@ -8,6 +9,10 @@ public:
     virtual f64 area() abstract;
 }
 
-u32 Mixed_Case_Name_42 = 0;
-u32 in = 0;            // `in` was removed as a keyword and is a normal identifier now
-_ = compute();
+static u32 Mixed_Case_Name_42 = 0;
+
+void use() {
+    u32 in = 0;          // `in` was removed as a keyword and is a normal identifier now
+    _ = compute();
+    std::file f = std::file::open(path);   // keywords are fine as names after '::' and '.'
+}

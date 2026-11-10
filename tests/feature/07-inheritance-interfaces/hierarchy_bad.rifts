@@ -1,0 +1,42 @@
+// feature 07: inheritance and override rules.
+interface printable {
+    u32 to_text();
+}
+
+class sealed_thing { }
+open class base_a { }
+open class base_b { }
+struct plain { }
+
+class bad1 : sealed_thing { }                //~ error[E3040]: 'sealed_thing' is not open
+class bad2 : base_a, base_b { }              //~ error[E3041]: more than one base class
+class bad3 : printable, base_a { }           //~ error[E3041]: must be listed first
+//~^ error[E3045]: does not implement 'printable::to_text()'
+class bad4 : plain { }                       //~ error[E3046]: cannot inherit from struct
+struct bad5 : base_a { }                     //~ error[E3046]: can only extend interfaces
+
+class closed {
+public:
+    virtual void f() { }                     //~ error[E3042]: not an open class
+}
+
+open class animal {
+public:
+    virtual u32 legs() { return 4; }
+    virtual u32 sound() abstract;
+    u32 age() { return 1; }
+    u32 noabs() abstract;                    //~ error[E3048]: must be declared 'virtual'
+    ~animal() { }
+}
+
+class dog : animal {                         //~ error[E3045]: does not implement 'animal::sound()'
+public:
+    u32 legs() { return 4; }                 //~ error[E3044]: same name as 'animal::legs()'
+    u32 run(u32 speed) override { return speed; }   //~ error[E3043]: overrides nothing
+    u32 age() override { return 2; }         //~ error[E3043]: overrides nothing
+    u32 noabs() override { return 0; }
+    void bark() {
+        this.cat::meow();                    //~ error[E3047]: 'cat' is not a base class
+    }
+    ~cat() { }                               //~ error[E3049]
+}

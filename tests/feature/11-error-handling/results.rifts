@@ -1,0 +1,19 @@
+// feature 11: results, options, '?', must-use discards.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+std::result<employee, parse_error> parse_line(std::str line) {
+    std::darray<std::str> parts = line.split(',');
+    if (parts.len() != 3) {
+        return std::error(parse_error::bad_line);
+    }
+    u32 age    = parts[1].parse<u32>().or_error(parse_error::bad_number)?;
+    f64 salary = parts[2].parse<f64>().or_error(parse_error::bad_number)?;
+    _ = cleanup();
+    u32 x = r.value_or(0);
+    u32 y = r.expect(f"missing value");
+    std::panic(f"unreachable");
+    return std::ok(employee{
+        .name   = std::string::from(parts[0]),
+        .age    = age,
+        .salary = salary,
+    });
+}

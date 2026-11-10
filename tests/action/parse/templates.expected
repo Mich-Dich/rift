@@ -1,0 +1,23 @@
+exit: 1
+--- stdout
+(fn f -> void
+  (block
+    (discard (< (path a) (path b)))
+    (discard (call (path larger<u32>) (int 3) (int 4)))
+    (discard (new std::darray<u32>))
+    (discard (call (path std::unique_ptr<circle>::make) (path c)))
+    (discard (call (.parse<u32> (index (path parts) (int 1)))))
+    (var nested : std::darray<std::darray<u32>> (default))
+    (var deep : std::result<std::option<std::darray<u8>>, e> (default))
+    (var sized : std::array<u8, (* (int 4) (path N))> (default))
+    (var fn_type : std::function<u32(u32, bool)> (default))
+    (var raw : std::raw_ptr<mut u8> (nullptr))))
+--- stderr
+error[E2008]: comparison operators cannot be chained
+ --> tests/action/parse/templates.rifts:5:15
+  |
+5 |     _ = a < b > c;
+  |               ^ second operator
+  = note: write 'a < b && b < c'
+
+1 error, 0 warnings

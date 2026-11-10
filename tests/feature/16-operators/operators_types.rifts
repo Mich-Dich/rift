@@ -1,0 +1,30 @@
+// feature 16: operator operand rules, shifts, bit(n), wrapping arithmetic.
+import std;
+struct point {
+    f64 x = 0.0;
+    bool operator==(point& other) = default;
+}
+
+struct plain {
+    u32 v = 0;
+}
+
+void ops(u32 a, i32 s, f64 f, bool b, point p, point q, plain r, plain t) {
+    u32 x = a +% 1;
+    f64 y = f +% 1.0;               //~ error[E4013]: floats never wrap
+    u32 z = a & 3;
+    f64 w = f & 1.0;                //~ error[E4013]: does not apply to 'f64'
+    bool bb = b & b;                //~ error[E4013]
+    u32 sh = a << 31;
+    u32 too_far = a << 32;          //~ error[E4080]: not smaller than the width
+    u8 bit_ok = bit(7);
+    u8 bit_bad = bit(8);            //~ error[E4080]: bit(8) does not exist in 'u8'
+    auto explicit_bit = bit<u128>(100);
+    u32 neg = -a;                   //~ error[E4015]: unsigned
+    i32 neg_ok = -s;
+    bool eq = p == q;
+    bool ne = r == t;               //~ error[E4014]: has no 'operator=='
+    bool lt = b < b;                //~ error[E4013]: cannot be ordered
+    std::ordering o = a <=> a;
+    u32 mask = bit(0) | bit(3) | bit(7);
+}

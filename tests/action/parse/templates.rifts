@@ -1,0 +1,15 @@
+// RUN: riftc parse %s
+// '<' is a template argument list only when it is followed by '(', '::' or '{'.
+void f() {
+    _ = a < b;
+    _ = a < b > c;
+    _ = larger<u32>(3, 4);
+    _ = std::darray<u32>{};
+    _ = std::unique_ptr<circle>::make(c);
+    _ = parts[1].parse<u32>();
+    std::darray<std::darray<u32>> nested = default;
+    std::result<std::option<std::darray<u8>>, e> deep = default;
+    std::array<u8, 4 * N> sized = default;
+    std::function<u32(u32, bool)> fn_type = default;
+    std::raw_ptr<mut u8> raw = nullptr;
+}

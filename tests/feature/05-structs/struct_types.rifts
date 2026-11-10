@@ -1,0 +1,18 @@
+// feature 05: struct literal values have the field's type; fields are accessed by name.
+import std;
+
+struct employee {
+    std::string name;
+    u32 age = 0;
+    f64 salary = 0.0;
+}
+
+void build() {
+    employee e = employee{ .name = std::string::from("Ann"), .age = 41, .salary = 1.0 };
+    employee f = employee{ .name = std::string::from("Bo"), .age = 1.5 };   //~ error[E4010]: expected 'u32'
+    employee g = employee{ .name = std::string::from("Cy"), .salary = 2 };  //~ error[E4003]
+    u32 age = e.age;
+    f64 s = e.salary;
+    u32 wrong = e.salary;           //~ error[E4010]
+    u32 none = e.height;            //~ error[E4070]: no field or method 'height'
+}

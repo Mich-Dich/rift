@@ -1,0 +1,14 @@
+// RUN: riftc check %s
+// Type errors in the human format.
+struct counter {
+    u32 value = 0;
+    void inc() mut { this.value += 1; }
+}
+
+u32 f(u32 a, u64 b) {
+    u64 c = a;
+    u8 d = 300;
+    counter k = counter{};
+    k.inc();
+    if (b) { }
+}

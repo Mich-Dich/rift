@@ -1,0 +1,5 @@
+// main takes nothing or 'std::span<std::str> args'.
+import std;
+u32 main(u32 argc) {                //~ error[E4111]
+    return 0;
+}

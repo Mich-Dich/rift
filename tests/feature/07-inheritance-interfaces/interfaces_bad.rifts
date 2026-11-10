@@ -1,0 +1,5 @@
+// feature 07: interfaces are method signatures only.
+interface printable {
+    std::string to_text() { return ""; }    //~ error[E2028]
+    u32 count;                               //~ error[E2001]: interfaces cannot have fields
+}

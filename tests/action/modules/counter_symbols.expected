@@ -1,0 +1,21 @@
+exit: 0
+--- stdout
+module counter
+  header: tests/feature/09-modules/counter_project/counter.rifth
+  source: tests/feature/09-modules/counter_project/counter.rifts
+  imports: std
+  class counter
+    public method get() -> u32  [header, defined in source]
+    public method inc() mut -> void  [header, defined in source]
+    public static method starting_at(u32) -> counter  [header, defined in source]
+    public destructor ~counter()  [header, defined in source]
+    private field value : u32 = ...
+    private field history : u32 = ...
+    layout: value history
+  enum mode : u8
+    up
+    down
+  compile_time default_step : u32
+  fn twice(u32) -> u32  [header, defined in source]
+  private fn step(u32) -> u32
+--- stderr

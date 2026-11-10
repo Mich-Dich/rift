@@ -1,0 +1,23 @@
+// feature 12: 'move' works on local variables and by-value parameters only.
+import std;
+
+static u32 global = 0;
+
+struct holder {
+    std::string text;
+}
+
+void consume(std::string s) { }
+
+void moves(std::string by_value, std::string& by_ref, holder h) {
+    std::string local = std::string::from("x");
+    consume(move local);
+    consume(move by_value);
+    consume(move by_ref);                    //~ error[E3032]: 'by_ref' is a reference
+    consume(move h.text);                    //~ error[E3032]: only local variables
+    u32 g = move global;                     //~ error[E3032]: cannot move variable 'global'
+    match (std::option<std::string>::make()) {
+        std::some(s) => consume(move s),     // match bindings own their value
+        std::none => consume(std::string::from("")),
+    }
+}

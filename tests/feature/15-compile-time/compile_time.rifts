@@ -1,0 +1,25 @@
+// feature 15: compile_time functions and values, deduce.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+compile_time u32 square(u32 x) { return x * x; }
+
+compile_time run_time u32 clamp(u32 x, u32 lo, u32 hi) {
+    return if (x < lo) { lo } else if (x > hi) { hi } else { x };
+}
+
+compile_time usize buffer_size = 4096;
+
+template<type T>
+deduce double_it(T x) {
+    if compile_time (std::is_integer<T>()) {
+        return cast<i64>(x) * 2;
+    } else if compile_time (std::is_float<T>()) {
+        return cast<f64>(x) * 2.0;
+    } else {
+        std::compile_error("double_it: T must be an integer or a float");
+    }
+}
+
+void use() {
+    compile_time u32 area = square(16);
+    i64 a = double_it(42i32);
+}

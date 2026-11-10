@@ -1,0 +1,19 @@
+// RUN: riftc parse %s
+u32 f(mut std::darray<u32>& list) {
+    mut u32 total = 0;
+    for (mut u32& x : list) {
+        x *= 2;
+        total += x;
+    }
+    while (total > 100) { total -= 1; }
+    unsafe { _ = *ptr; }
+    u32 v = match (total) {
+        0 => 1,
+        1..=9 => 2,
+        n if n > 50 => 3,
+        _ => { 4 },
+    };
+    auto add = [mut &total, step = 2u32](u32 y) -> u32 { return y + step; };
+    if compile_time (std::is_integer<u32>()) { } else if (v) { } else { }
+    { u32 inner = 1; inner }
+}

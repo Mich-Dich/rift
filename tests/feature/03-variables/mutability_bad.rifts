@@ -1,0 +1,36 @@
+// feature 03/04: only mut variables (and mutable references) can change.
+import std;
+struct point {
+    f64 x = 0.0;
+}
+
+static u32 fixed = 0;
+compile_time u32 limit = 10;
+
+void bump(mut u32& x) { x += 1; }
+void read(u32& x) { }
+
+void mutate(u32& by_ref, mut u32& by_mut_ref, u32 by_value, mut u32 by_mut_value) {
+    u32 a = 1;
+    mut u32 b = 1;
+    point p = point{};
+    mut point q = point{};
+    a = 2;                          //~ error[E4020]: cannot assign to 'a'
+    a += 1;                         //~ error[E4020]
+    b = 2;
+    p.x = 1.0;                      //~ error[E4020]: cannot assign to 'p.x'
+    q.x = 1.0;
+    by_ref = 1;                     //~ error[E4020]: cannot assign to 'by_ref'
+    by_mut_ref = 1;
+    by_value = 1;                   //~ error[E4020]
+    by_mut_value = 1;
+    fixed = 1;                      //~ error[E4020]
+    limit = 1;                      //~ error[E4020]
+    bump(mut b);
+    bump(b);                        //~ error[E4023]: marked with 'mut'
+    bump(mut a);                    //~ error[E4020]: not mutable
+    read(mut b);                    //~ error[E4024]
+    read(b);
+    std::raw_ptr<mut u32> r = mut &a;    //~ error[E4020]
+    1 = 2;                          //~ error[E4025]
+}

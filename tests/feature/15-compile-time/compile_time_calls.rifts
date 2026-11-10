@@ -1,0 +1,19 @@
+// feature 15: compile-time code may only call compile_time functions.
+compile_time u32 square(u32 x) { return x * x; }
+compile_time run_time u32 clamp(u32 x, u32 lo, u32 hi) {
+    return if (x < lo) { lo } else if (x > hi) { hi } else { x };
+}
+u32 runtime_only(u32 x) { return x; }
+
+compile_time u32 area = square(16);
+compile_time u32 bad_area = runtime_only(16);     //~ error[E4120]: 'runtime_only'
+
+compile_time u32 uses_runtime(u32 x) {
+    return runtime_only(x);                        //~ error[E4120]
+}
+
+void run(u32 v) {
+    u32 a = clamp(v, 0, 10);
+    compile_time u32 c = square(4);
+    compile_time u32 d = runtime_only(4);          //~ error[E4120]
+}

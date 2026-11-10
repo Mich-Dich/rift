@@ -1,0 +1,22 @@
+exit: 0
+--- stdout
+(import std::filesystem)
+(compile_time var buffer_size : usize (doc " A documented constant.") (int 4096))
+(private static var counter : mut u32 (int 0))
+(open view struct pair : printable
+  (template (type T : std::comparable & std::cloneable) (value N : usize))
+  (field first : T)
+  (field second : T (default))
+  (operator== -> bool = default (param other : pair&))
+  (fn to_text -> std::string override))
+(class counter
+  (public static fn make -> counter (param start : u32))
+  (public fn inc -> void mut)
+  (public destructor ~counter)
+  (private field value : u32 (int 0)))
+(enum shape : u8 (circle f64) (square f64) (empty))
+(extern "C" fn puts -> i32 (param text : std::raw_ptr<u8>))
+(unsafe fn peek -> u32 (param address : usize))
+(compile_time run_time fn clamp -> u32 (param x : u32) (param lo : mut u32&) (param hi : u32&))
+(fn twice -> deduce (template (type T)) (param x : T))
+--- stderr

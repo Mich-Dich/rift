@@ -1,5 +1,4 @@
 // feature 10: braces are mandatory and assignment is not an expression.
-// XFAIL: needs the parser (spec 10)
 u32 main() {
     mut u32 x = 0;
     if (x == 0) x = 1;   //~ error

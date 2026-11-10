@@ -1,0 +1,5 @@
+// feature 18: every capture must be named.
+void f() {
+    auto a = [=]() { };                  //~ error[E2026]
+    auto b = [&]() { };                  //~ error[E2026]
+}

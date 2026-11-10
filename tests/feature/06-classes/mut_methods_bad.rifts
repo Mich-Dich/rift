@@ -1,0 +1,30 @@
+// feature 06: mut methods change 'this' and need a mutable receiver.
+class counter {
+public:
+    u32 get() {
+        this.value += 1;            //~ error[E4021]: non-mut method
+        this.inc();                 //~ error[E4021]: mut method
+        return this.value;
+    }
+    void inc() mut {
+        this.value += 1;
+        this.reset();
+    }
+    void reset() mut {
+        this.value = 0;
+    }
+    static counter make() { return counter{}; }
+private:
+    u32 value = 0;
+}
+
+void use() {
+    counter a = counter::make();
+    a.inc();                        //~ error[E4022]: 'inc' is a mut method, but 'a' is not mutable
+    mut counter b = counter::make();
+    b.inc();
+    u32 v = a.get();
+    counter::make().inc();          // temporaries may be changed
+    a.missing();                    //~ error[E4070]: no method 'missing'
+    u32 w = a.get;                  //~ error[E4073]: call it
+}

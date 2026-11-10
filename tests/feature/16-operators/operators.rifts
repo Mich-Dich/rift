@@ -1,0 +1,28 @@
+// feature 16: bit(n), checked/wrapping arithmetic, operator overloading.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+struct version {
+    u32 major = 0;
+    std::ordering operator<=>(version& other) { return std::ordering::equal; }
+    bool operator==(version& other) = default;
+}
+
+std::filesystem::path operator/(std::filesystem::path& lhs, std::str rhs) { return lhs; }
+
+class buffer {
+public:
+    u8& operator[](usize i) { return this.data[i]; }
+    mut u8& operator[](usize i) mut { return this.data[i]; }
+}
+
+void bits(mut u32 flags, u32 n) {
+    u16 x = bit(4);
+    auto z = bit<u128>(100);
+    flags |=  bit(4);
+    flags &= ~bit(4);
+    flags ^=  bit(4);
+    if (flags & bit(4)) { }
+    u32 mask = bit(0) | bit(3) | bit(7);
+    u32 dyn  = bit(n);
+    bool zero = flags & mask == 0;
+    u32 w = flags +% 1;
+}

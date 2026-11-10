@@ -1,0 +1,38 @@
+exit: 1
+--- stdout
+--- stderr
+error[E4010]: expected 'u64', found 'u32'
+ --> tests/action/types/type_errors.rifts:9:13
+  |
+9 |     u64 c = a;
+  |             ^ this is 'u32'
+  = note: there are no implicit conversions; write 'cast<u64>(...)'
+
+error[E4002]: 300 does not fit in 'u8'
+  --> tests/action/types/type_errors.rifts:10:12
+   |
+10 |     u8 d = 300;
+   |            ^^^ out of range
+   = note: 'u8' holds 0 to 255
+
+error[E4022]: 'inc' is a mut method, but 'k' is not mutable
+  --> tests/action/types/type_errors.rifts:12:5
+   |
+12 |     k.inc();
+   |     ^^^^^^^ immutable receiver
+   |
+11 |     counter k = counter{};
+   |             -
+   = note: declare it 'mut counter k'
+
+error[E4042]: 'f' may reach its end without returning a 'u32'
+  --> tests/action/types/type_errors.rifts:14:1
+   |
+14 | }
+   | ^ can end here without 'return'
+   |
+ 8 | u32 f(u32 a, u64 b) {
+   |     -
+   = note: declared here
+
+4 errors, 0 warnings

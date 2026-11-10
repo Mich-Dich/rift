@@ -1,0 +1,29 @@
+// Source part: method bodies in the class block, private members, private helpers.
+import std;
+
+class counter {
+public:
+    u32 get() {
+        return this.value;
+    }
+    void inc() mut {
+        this.value += step(default_step);
+    }
+    static counter starting_at(u32 value) {
+        return counter{ .value = value };     // private field is visible inside the module
+    }
+    ~counter() {
+        std::println(f"counter dropped at {this.value}");
+    }
+private:
+    u32 value = 0;
+    u32 history = 0;
+}
+
+u32 twice(u32 x) {
+    return step(x) * 2;
+}
+
+private u32 step(u32 x) {
+    return x;
+}

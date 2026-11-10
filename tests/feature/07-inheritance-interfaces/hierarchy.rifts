@@ -1,0 +1,43 @@
+// feature 07: a complete, correct hierarchy.
+import std;
+
+interface printable {
+    std::string to_text();
+}
+
+interface shape_like {
+    f64 area();
+}
+
+interface solid : shape_like {
+    f64 volume();
+}
+
+open class shape : printable {
+public:
+    std::string name;
+    virtual f64 area() abstract;
+    virtual std::string describe() {
+        return std::string::from("shape");
+    }
+    std::string to_text() override {
+        return this.describe();
+    }
+}
+
+class circle : shape, std::formattable {
+public:
+    f64 radius = 0.0;
+    f64 area() override {
+        return this.radius * this.radius * 3.14;
+    }
+    std::string describe() override {
+        return this.shape::describe();
+    }
+}
+
+struct cube : solid {
+    f64 side = 1.0;
+    f64 area() override { return this.side * this.side * 6.0; }
+    f64 volume() override { return this.side * this.side * this.side; }
+}

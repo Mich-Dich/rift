@@ -1,0 +1,20 @@
+class account {
+public:
+    static account open_with(u32 amount) { return account{ .amount = amount }; }
+    u32 balance() { return this.amount; }
+protected:
+    static u32 fee() { return 1; }
+private:
+    u32 amount = 0;
+    static u32 secret() { return 42; }
+}
+
+class locked {
+public:
+    u32 get() { return this.code; }
+private:
+    u32 code;                          // no default: cannot be built outside this module
+}
+
+u32 public_fn() { return helper(); }
+private u32 helper() { return 0; }

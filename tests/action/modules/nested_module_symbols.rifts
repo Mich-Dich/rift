@@ -1,0 +1,1 @@
+// RUN: riftc symbols --root=tests/feature/09-modules/shapes_project tests/feature/09-modules/shapes_project/shapes/circle.rifts

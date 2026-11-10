@@ -1,0 +1,34 @@
+// feature 13: dereferencing raw pointers, pointer arithmetic, unsafe and extern calls,
+// and non-thread-safe 'static mut' need an unsafe block.
+import std;
+
+extern "C" i32 puts(std::raw_ptr<u8> text);
+unsafe u32 read_register(usize address) { return 0; }
+static mut u32 raw_counter = 0;
+static mut std::atomic<u32> safe_counter = std::atomic<u32>{};
+
+struct node { u32 value = 0; }
+
+void pointers(std::raw_ptr<u8> text, std::raw_ptr<node> n) {
+    mut u32 value = 5;
+    std::raw_ptr<mut u32> p = mut &value;
+    std::raw_ptr<u32> q = &value;
+    std::raw_ptr<u32> none = nullptr;
+    bool same = p == nullptr;
+    *p = 6;                                  //~ error[E4100]: dereferencing a raw pointer
+    u32 r = read_register(0);                //~ error[E4101]: unsafe function
+    i32 w = puts(text);                      //~ error[E4101]: extern function
+    raw_counter += 1;                        //~ error[E4102]
+    u32 v = n->value;                        //~ error[E4100]
+    std::raw_ptr<mut u32> next = p.offset(1);   //~ error[E4100]: pointer arithmetic
+    unsafe {
+        *p = 7;
+        u32 r2 = read_register(0);
+        i32 w2 = puts(text);
+        raw_counter += 1;
+        u32 v2 = n->value;
+        std::raw_ptr<mut u32> next2 = p.offset(1);
+    }
+    std::raw_ptr<mut u32> bad = q;           //~ error[E4010]
+    u32 x = n.value;                         //~ error[E4074]
+}

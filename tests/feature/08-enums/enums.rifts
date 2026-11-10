@@ -1,0 +1,26 @@
+// feature 08: simple enums and enums with payloads.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+enum parse_error : u8 {
+    bad_line = 0,
+    bad_number,
+}
+
+enum token : u8 {
+    number(f64),
+    identifier(std::string),
+    plus,
+    end
+}
+
+template<type T, type E>
+enum result : u8 { ok(T), error(E) }
+
+f64 value_of(token t) {
+    token u = token::number(1.5);
+    return match (t) {
+        token::number(n)     => n,
+        token::identifier(_) => 0.0,
+        token::plus          => 0.0,
+        token::end           => 0.0,
+    };
+}

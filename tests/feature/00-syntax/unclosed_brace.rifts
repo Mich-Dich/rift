@@ -1,0 +1,3 @@
+// An unclosed delimiter is reported at the opener.
+void f() {                               //~ error[E2016]: unclosed '{'
+    u32 x = 1;

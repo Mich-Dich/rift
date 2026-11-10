@@ -1,0 +1,75 @@
+exit: 0
+--- stdout
+(import std)
+(struct employee
+  (field name : std::string (string ""))
+  (field age : u32 (int 0))
+  (field salary : f64 (float 0.0))
+  (fn is_senior -> bool (block (return (>= (.age (this)) (int 30))))))
+(enum parse_error : u8 (bad_line (= (int 0))) (bad_number))
+(fn parse_line -> std::result<employee, parse_error>
+  (param line : std::str&)
+  (block
+    (var parts : std::darray<std::str> (call (.split (path line)) (char ",")))
+    (if
+      (!= (call (.len (path parts))) (int 3))
+      (block (return (call (path std::error) (path parse_error::bad_line)))))
+    (var age : u32
+      (?
+        (call
+          (.or_error (call (.parse<u32> (index (path parts) (int 1)))))
+          (path parse_error::bad_number))))
+    (var salary : f64
+      (?
+        (call
+          (.or_error (call (.parse<f64> (index (path parts) (int 2)))))
+          (path parse_error::bad_number))))
+    (return
+      (call
+        (path std::ok)
+        (new employee
+          (.name (call (path std::string::from) (index (path parts) (int 0))))
+          (.age (path age))
+          (.salary (path salary)))))))
+(fn load -> std::result<std::darray<employee>, std::io_error>
+  (param path : std::filesystem::path&)
+  (block
+    (var in : mut std::file (? (call (path std::file::open) (path path))))
+    (var employees : mut std::darray<employee> (default))
+    (for line : std::str
+      (in (call (.lines (path in))))
+      (block
+        (if (call (.is_empty (path line))) (block (continue)))
+        (value
+          (match
+            (call (path parse_line) (path line))
+            (arm (alt std::ok (bind e)) (call (.push (path employees)) (move (path e))))
+            (arm
+              (alt std::error _)
+              (call (path std::eprintln) (format-string "skipping bad line: {line}")))))))
+    (return (call (path std::ok) (move (path employees))))))
+(fn main -> std::exit_code
+  (block
+    (var csv : std::filesystem::path
+      (/ (call (path std::filesystem::executable_dir)) (string "employees.csv")))
+    (var employees : mut std::darray<employee>
+      (match
+        (call (path load) (path csv))
+        (arm (alt std::ok (bind list)) (move (path list)))
+        (arm
+          (alt std::error (bind e))
+          (block
+            (call (path std::eprintln) (format-string "error: {e}"))
+            (return (path std::exit_code::failure))))))
+    (call
+      (.retain (path employees))
+      (lambda (captures) (param e : employee&) (block (return (call (.is_senior (path e)))))))
+    (call
+      (.sort_by_key (path employees))
+      (path std::sort_order::descending)
+      (lambda (captures) (param e : employee&) (block (return (.salary (path e))))))
+    (for e : employee&
+      (in (path employees))
+      (block (call (path std::println) (format-string "{e.name:<20} {e.age:>3} {e.salary:>10.2}"))))
+    (return (path std::exit_code::success))))
+--- stderr

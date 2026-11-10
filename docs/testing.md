@@ -82,6 +82,24 @@ u32 c = `5`;         //~ error[E1001]
 Use feature tests to **pin down the spec**: one good file showing what is allowed and one
 bad file showing what is rejected.
 
+**Stopping early.** `// STOP-AFTER: parse` (or `lex`, `resolve`, `types`) runs only the phases up to
+that one. Syntax tests use it, because their snippets refer to names that are never declared.
+
+**Multi-file tests.** A directory whose name ends in `_project` is one test: `main.rifts` is
+the entry, the directory is the project root (`--root`), and annotations in *every* file of
+the directory are matched against diagnostics in that file:
+
+```
+tests/feature/09-modules/visibility_project/
+    main.rifts        import lib;  ...  lib::account{ .amount = 5 };   //~ error[E3036]
+    lib.rifth         the module's interface
+    lib.rifts         its implementation
+```
+
+Files inside a `_project` directory are never run as tests on their own, in either suite, so
+action tests can use them as fixtures:
+`// RUN: riftc check --root=tests/feature/09-modules/counter_project tests/feature/09-modules/counter_project/main.rifts`.
+
 ### 3. Action tests: `tests/action/**/*.rifts` + `.expected`
 
 End-to-end runs of the real `riftc` binary. Each test names its command line; the runner
@@ -109,7 +127,12 @@ On a mismatch the runner prints a unified diff. If the change is intended, run
 `scripts/test.sh --update` and review the golden files with `git diff` before committing.
 
 Use action tests for **what a user sees**: CLI behavior, exit codes, the exact diagnostic
-layout, token dumps, and the example programs.
+layout, token dumps (`riftc lex`), syntax trees (`riftc parse`), merged module symbol tables
+(`riftc symbols`), typed syntax trees (`riftc typed`), and the example programs.
+`tests/feature/99-programs/` holds complete programs that must check without any diagnostic;
+they guard against false errors.
+A `riftc parse` golden file is the easiest way to check *how* something parsed, e.g.
+operator precedence in `tests/action/parse/precedence.rifts`.
 
 ## Tests for features that don't exist yet: `XFAIL`
 

@@ -1,0 +1,30 @@
+exit: 0
+--- stdout
+(fn f -> u32
+  (param list : mut std::darray<u32>&)
+  (block
+    (var total : mut u32 (int 0))
+    (for x : mut u32&
+      (in (path list))
+      (block (assign *= (path x) (int 2)) (assign += (path total) (path x))))
+    (while (> (path total) (int 100)) (block (assign -= (path total) (int 1))))
+    (unsafe-block (discard (deref (path ptr))))
+    (var v : u32
+      (match
+        (path total)
+        (arm (int 0) (int 1))
+        (arm (..= (int 1) (int 9)) (int 2))
+        (arm (bind n) (if (> (path n) (int 50))) (int 3))
+        (arm _ (block (value (int 4))))))
+    (var add : auto
+      (lambda
+        (captures (mut-ref total) (init step (int 2u32)))
+        (param y : u32)
+        (-> u32)
+        (block (return (+ (path y) (path step))))))
+    (if-compile-time
+      (call (path std::is_integer<u32>))
+      (block)
+      (else (if (path v) (block) (else (block)))))
+    (value (block (var inner : u32 (int 1)) (value (path inner))))))
+--- stderr

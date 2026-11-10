@@ -1,0 +1,18 @@
+// feature 03: no name may be declared twice in one function, not even in a nested scope.
+template<type T>
+T shadows(T value, u32 n) {
+    u32 n = 1;                         //~ error[E3028]: 'n' is already declared
+    {
+        T value = default;             //~ error[E3028]
+    }
+    for (u32 n : 0..3) { }             //~ error[E3028]
+    u32 T = 0;                         //~ error[E3028]: already a template parameter
+    u32 picked = match (n) {
+        value => 1,                    //~ error[E3028]
+        _ => 0,
+    };
+    auto f = [](u32 n) { return n; };  //~ error[E3028]
+    u32 local = 0;
+    u32 local = 1;                     //~ error[E3028]
+    return value;
+}

@@ -1,8 +1,9 @@
 // feature 02: unsuffixed literals take their type from context; without context it's an error.
-// XFAIL: needs the type checker (spec 02)
-u32 a = 0;
-u64 b = a + 1;           //~ error
-u8  d = 300;             //~ error
-f64 e = 0;               //~ error
-auto f = 5;              //~ error
-auto g = 5u32;
+void f() {
+    u32 a = 0;
+    u64 b = a + 1;           //~ error
+    u8  d = 300;             //~ error
+    f64 e = 0;               //~ error
+    auto f = 5;              //~ error
+    auto g = 5u32;
+}

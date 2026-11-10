@@ -1,8 +1,11 @@
 // feature 01: string, raw string and format string literals.
-std::str a = "hello\n";
-std::str b = "tab\t quote\" backslash\\ nul\0 unicode\u{263A}";
-std::str c = "{not interpolated}";
-std::str d = r"C:\path\no\escapes";
-std::str e = "";
-std::str f = "héllo wörld";
-std::println(f"x = {x}, {{literal braces}}");
+// STOP-AFTER: parse   (syntax test: names are not declared)
+void literals(u32 x) {
+    std::str a = "hello\n";
+    std::str b = "tab\t quote\" backslash\\ nul\0 unicode\u{263A}";
+    std::str c = "{not interpolated}";
+    std::str d = r"C:\path\no\escapes";
+    std::str e = "";
+    std::str f = "héllo wörld";
+    std::println(f"x = {x}, {{literal braces}}");
+}

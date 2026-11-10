@@ -52,6 +52,7 @@ ANNOTATION = re.compile(
 )
 RUN_LINE = re.compile(r"^\s*//\s*RUN:\s*(?P<cmd>.+?)\s*$")
 XFAIL_LINE = re.compile(r"^\s*//\s*XFAIL:\s*(?P<reason>.*)$", re.MULTILINE)
+STOP_AFTER_LINE = re.compile(r"^\s*//\s*STOP-AFTER:\s*(?P<phase>lex|parse|resolve|types)\b", re.MULTILINE)
 
 
 # --- output helpers -----------------------------------------------------------------------
@@ -149,18 +150,20 @@ def rel_or_abs(p: Path) -> str:
 
 @dataclass(frozen=True)
 class Expected:
+    path: str
     line: int
     sev: str
     code: str | None
     msg: str | None
 
-    def describe(self) -> str:
+    def describe(self, show_path: bool) -> str:
         code = f"[{self.code}]" if self.code else ""
         msg = f": {self.msg}" if self.msg else ""
-        return f"line {self.line}: {self.sev}{code}{msg}"
+        where = f"{Path(self.path).name}:" if show_path else "line "
+        return f"{where}{self.line}: {self.sev}{code}{msg}"
 
 
-def parse_annotations(text: str) -> list[Expected]:
+def parse_annotations(path: Path, text: str) -> list[Expected]:
     expected = []
     for index, line in enumerate(text.splitlines(), start=1):
         m = ANNOTATION.search(line)
@@ -168,22 +171,44 @@ def parse_annotations(text: str) -> list[Expected]:
             continue
         direction = m.group("dir") or ""
         target = index - len(direction) if direction.startswith("^") else index + len(direction)
-        expected.append(Expected(target, m.group("sev"), m.group("code"), m.group("msg") or None))
+        expected.append(Expected(rel(path), target, m.group("sev"), m.group("code"), m.group("msg") or None))
     return expected
 
 
 def matches(exp: Expected, diag: re.Match[str]) -> bool:
-    return (int(diag.group("line")) == exp.line
+    return (Path(diag.group("path")).as_posix() == exp.path
+            and int(diag.group("line")) == exp.line
             and diag.group("sev") == exp.sev
             and (exp.code is None or diag.group("code") == exp.code)
             and (exp.msg is None or exp.msg in diag.group("msg")))
 
 
+def is_project_dir(path: Path) -> bool:
+    return path.is_dir() and path.name.endswith("_project")
+
+
+def inside_project(path: Path) -> bool:
+    return any(p.name.endswith("_project") for p in path.parents)
+
+
 def run_feature(path: Path, riftc: Path) -> Result:
+    """`path` is a single test file, or a `*_project` directory whose entry is main.rifts."""
     name = rel(path)
-    text = path.read_text(encoding="utf-8", errors="replace")
-    expected = parse_annotations(text)
-    proc = run([str(riftc), "check", "--diagnostic-format=short", "--color=never", name])
+    if is_project_dir(path):
+        files = sorted(path.rglob("*.rift[sh]"))
+        entry = path / "main.rifts"
+        extra = [f"--root={name}"]
+        if not entry.exists():
+            return Result("feature", name, "FAIL", ["a *_project directory needs a main.rifts entry file"])
+    else:
+        files, entry, extra = [path], path, []
+    texts = {f: f.read_text(encoding="utf-8", errors="replace") for f in files}
+    all_text = "\n".join(texts.values())
+    expected = [e for f in files for e in parse_annotations(f, texts[f])]
+    stop = STOP_AFTER_LINE.search(all_text)
+    if stop:
+        extra.append(f"--stop-after={stop.group('phase')}")
+    proc = run([str(riftc), "check", "--diagnostic-format=short", "--color=never", *extra, rel(entry)])
 
     details: list[str] = []
     actual = []
@@ -192,25 +217,27 @@ def run_feature(path: Path, riftc: Path) -> Result:
         if m:
             actual.append(m)
 
+    multi = len(files) > 1
     unmatched = list(actual)
     for exp in expected:
         hit = next((d for d in unmatched if matches(exp, d)), None)
         if hit is None:
-            details.append(f"missing    {exp.describe()}")
+            details.append(f"missing    {exp.describe(multi)}")
         else:
             unmatched.remove(hit)
     for d in unmatched:
-        details.append(f"unexpected line {d.group('line')}:{d.group('col')}: "
+        where = f"{Path(d.group('path')).name}:" if multi else "line "
+        details.append(f"unexpected {where}{d.group('line')}:{d.group('col')}: "
                        f"{d.group('sev')}[{d.group('code')}]: {d.group('msg')}")
 
     want_exit = 1 if any(e.sev == "error" for e in expected) else 0
     if proc.returncode != want_exit:
         details.append(f"exit code {exit_code_note(proc.returncode)}, expected {exit_code_note(want_exit)}")
-        if proc.returncode not in (0, 1):
+        if proc.returncode not in (0, 1) or not actual:
             details.extend("  " + l for l in proc.stderr.splitlines()[-10:])
 
     result = Result("feature", name, "FAIL" if details else "PASS", details)
-    return apply_xfail(result, text)
+    return apply_xfail(result, all_text)
 
 
 # --- action suite -------------------------------------------------------------------------
@@ -263,8 +290,13 @@ def run_action(path: Path, riftc: Path, update: bool) -> Result:
 
 # --- main ---------------------------------------------------------------------------------
 
-def discover(suite_dir: Path, filters: list[str]) -> list[Path]:
+def discover(suite_dir: Path, filters: list[str], projects: bool) -> list[Path]:
+    """Test files of a suite. Files inside `*_project` directories are fixtures; with
+    `projects=True` each such directory is itself one test."""
     files = sorted(suite_dir.rglob("*.rifts")) + sorted(suite_dir.rglob("*.rifth"))
+    files = [f for f in files if not inside_project(f)]
+    if projects:
+        files += sorted(d for d in suite_dir.rglob("*_project") if is_project_dir(d) and not inside_project(d))
     if filters:
         files = [f for f in files if any(flt in rel(f) for flt in filters)]
     return files
@@ -301,9 +333,9 @@ def main() -> int:
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         jobs = []
         if "feature" in suites:
-            jobs += [pool.submit(run_feature, f, riftc) for f in discover(TESTS / "feature", args.filters)]
+            jobs += [pool.submit(run_feature, f, riftc) for f in discover(TESTS / "feature", args.filters, projects=True)]
         if "action" in suites:
-            jobs += [pool.submit(run_action, f, riftc, args.update) for f in discover(TESTS / "action", args.filters)]
+            jobs += [pool.submit(run_action, f, riftc, args.update) for f in discover(TESTS / "action", args.filters, projects=False)]
         results += [j.result() for j in jobs]
 
     colors = {"PASS": style.green, "XFAIL": style.yellow, "NEW": style.yellow, "UPDATED": style.yellow,

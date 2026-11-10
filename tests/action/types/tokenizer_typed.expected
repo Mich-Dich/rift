@@ -1,0 +1,193 @@
+exit: 0
+--- stdout
+(import std)
+(enum token_kind : u8 (number) (plus) (minus) (star) (end))
+(enum token : u8 (number f64) (op token_kind) (end))
+(enum parse_error : u8 (bad_char (= (int 1 : u8))) (empty))
+(struct cursor
+  (field text : std::str)
+  (field pos : usize (int 0 : usize))
+  (fn done -> bool
+    (block
+      (return : never
+        (>= : bool
+          (.pos : usize (this : cursor&))
+          (call : {unknown} (.len : {unknown} (.text : std::str (this : cursor&))))))))
+  (fn advance -> void mut
+    (param by : usize)
+    (block (assign += (.pos : usize (this : mut cursor&)) (path by : usize)))))
+(interface evaluator (fn apply -> f64 (param lhs : f64) (param rhs : f64)))
+(struct adder : evaluator
+  (field uses : u32 (int 0 : u32))
+  (fn apply -> f64 override
+    (param lhs : f64)
+    (param rhs : f64)
+    (block (return : never (+ : f64 (path lhs : f64) (path rhs : f64))))))
+(open class shape
+  (public field name : std::string)
+  (public virtual fn area -> f64 abstract)
+  (public virtual fn corners -> u32 (block (return : never (int 0 : u32)))))
+(class square : shape
+  (public field side : f64 (float 1.0 : f64))
+  (public fn area -> f64 override
+    (block (return : never (* : f64 (.side : f64 (this : square&)) (.side : f64 (this : square&))))))
+  (public fn corners -> u32 override (block (return : never (int 4 : u32)))))
+(fn larger -> T
+  (template (type T))
+  (param a : T)
+  (param b : T)
+  (block
+    (return : never
+      (if : T
+        (> : bool (path a : T) (path b : T))
+        (block (value (path a : T)))
+        (else (block : T (value (path b : T))))))))
+(compile_time fn square_of -> u32
+  (param x : u32)
+  (block (return : never (* : u32 (path x : u32) (path x : u32)))))
+(compile_time var table_size : u32 (call : u32 (path square_of) (int 4 : u32)))
+(static var start : u32 (int 10 : u32))
+(fn weight -> f64
+  (param k : token_kind)
+  (block
+    (return : never
+      (match : f64
+        (path k : token_kind)
+        (arm (alt token_kind::plus) (float 1.0 : f64))
+        (arm (alt token_kind::minus) (float 1.0 : f64))
+        (arm (alt token_kind::star) (float 2.0 : f64))
+        (arm _ (float 0.0 : f64))))))
+(fn count_tokens -> std::result<u32, parse_error>
+  (param c : mut cursor&)
+  (block
+    (var count : mut u32 (int 0 : u32))
+    (while : void
+      (! : bool (call : bool (.done (path c : mut cursor&))))
+      (block
+        (call : void (.advance (path c : mut cursor&)) (int 1 : usize))
+        (assign += (path count : u32) (int 1 : u32))
+        (value (if : void (> : bool (path count : u32) (int 1000 : u32)) (block (break : never))))))
+    (if : void
+      (== : bool (path count : u32) (int 0 : u32))
+      (block
+        (return : never
+          (call : {unknown} (path std::error) (path parse_error::empty : parse_error)))))
+    (return : never (call : {unknown} (path std::ok) (path count : u32)))))
+(fn classify -> u32
+  (param code : u32)
+  (block
+    (var label : std::str
+      (match : std::static_str
+        (path code : u32)
+        (arm (int 200 : u32) (string "ok" : std::static_str))
+        (arm (..= (int 400 : u32) (int 499 : u32)) (string "client" : std::static_str))
+        (arm
+          (bind x)
+          (if (>= : bool (path x : u32) (int 500 : u32)))
+          (string "server" : std::static_str))
+        (arm _ (string "other" : std::static_str))))
+    (return : never
+      (if : u32
+        (> : bool (call : {unknown} (.len : {unknown} (path label : std::str))) (int 2 : {unknown}))
+        (block (value (int 1 : u32)))
+        (else (block : u32 (value (int 0 : u32))))))))
+(fn bits -> void
+  (param flags : mut u32)
+  (param n : u32)
+  (block
+    (assign |= (path flags : u32) (bit : u32 (int 4 : u32)))
+    (assign &= (path flags : u32) (~ : u32 (bit : u32 (int 4 : u32))))
+    (assign ^= (path flags : u32) (bit : u32 (path n : u32)))
+    (var mask : u32 (| : u32 (bit : u32 (int 0 : u32)) (bit : u32 (int 3 : u32))))
+    (var wide : u64 (<< : u64 (cast u64 : u64 (path mask : u32)) (int 40 : u64)))
+    (var low : u8 (cast::truncate u8 : u8 (path flags : u32)))
+    (var clamped : i32 (cast::saturate i32 : i32 (float 3.9 : f64)))
+    (value
+      (if : void
+        (& : u32 (path flags : u32) (path mask : u32))
+        (block (assign = (path flags : u32) (+% : u32 (path flags : u32) (int 1 : u32))))))))
+(fn sum_to -> u32
+  (param n : u32)
+  (block
+    (var total : mut u32 (int 0 : u32))
+    (for i : u32 : void
+      (in (.. : range<u32> (int 0 : u32) (path n : u32)))
+      (block
+        (if : void
+          (== : bool (% : u32 (path i : u32) (int 2 : u32)) (int 0 : u32))
+          (block (continue : never)))
+        (assign += (path total : u32) (path i : u32))))
+    (for b : u8 : void
+      (in (..= : range<u8> (int 0 : u8) (int 255 : u8)))
+      (block (assign += (path total : u32) (cast u32 : u32 (path b : u8)))))
+    (return : never (path total : u32))))
+(fn pointers -> void
+  (block
+    (var value : mut u32 (int 5 : u32))
+    (var p : std::raw_ptr<mut u32> (addr-mut : std::raw_ptr<mut u32> (path value : u32)))
+    (value
+      (if : void
+        (path p : std::raw_ptr<mut u32>)
+        (block
+          (value
+            (unsafe-block : void
+              (assign = (deref : u32 (path p : std::raw_ptr<mut u32>)) (int 6 : u32)))))))))
+(fn main -> std::exit_code
+  (block
+    (var c : mut cursor (new cursor : cursor (.text (string "1 + 2 * 3" : std::static_str))))
+    (var n : u32
+      (match : u32
+        (call : std::result<u32, parse_error> (path count_tokens) (mut : cursor (path c : cursor)))
+        (arm (alt std::ok (bind count)) (path count : u32))
+        (arm
+          (alt std::error (bind e))
+          (block : never
+            (call : {unknown} (path std::eprintln) (format-string "error: {e}" : std::format_args))
+            (return : never (path std::exit_code::failure : {unknown}))))))
+    (var a : adder (new adder : adder))
+    (var r : f64
+      (call : f64
+        (.apply (path a : adder))
+        (float 1.0 : f64)
+        (call : f64 (path weight) (path token_kind::plus : token_kind))))
+    (var sq : square
+      (new square : square
+        (.name (call : {unknown} (path std::string::from) (string "sq" : std::static_str)))
+        (.side (float 2.0 : f64))))
+    (var s : shape& (path sq : square))
+    (var area : f64 (call : f64 (.area (path s : shape&))))
+    (var big : u32 (call : u32 (path larger) (path n : u32) (path start : u32)))
+    (var big64 : u64 (call : u64 (path larger<u64>) (int 1 : u64) (int 2 : u64)))
+    (var counter : mut u32 (int 0 : u32))
+    (var inc : auto
+      (lambda : {unknown}
+        (captures (mut-ref counter))
+        (block (assign += (path counter : mut u32&) (int 1 : u32)))))
+    (var add : auto
+      (lambda : {unknown}
+        (captures (copy n))
+        (param x : u32)
+        (-> u32)
+        (block (return : never (+ : u32 (path x : u32) (path n : u32))))))
+    (var m : u32 (call : {unknown} (path add : {unknown}) (int 1 : {unknown})))
+    (var t : token (call : token (path token::number : token) (float 1.5 : f64)))
+    (var v : f64
+      (match : f64
+        (path t : token)
+        (arm (alt token::number (bind x)) (path x : f64))
+        (arm (alt token::op (bind k)) (call : f64 (path weight) (path k : token_kind)))
+        (arm (alt token::end) (float 0.0 : f64))))
+    (discard
+      (call : std::result<u32, parse_error> (path count_tokens) (mut : cursor (path c : cursor))))
+    (call : void (path bits) (path n : u32) (int 3 : u32))
+    (var total : u32
+      (+ : u32
+        (+ : u32
+          (call : u32 (path sum_to) (int 10 : u32))
+          (call : u32 (path classify) (int 200 : u32)))
+        (path table_size : u32)))
+    (call : {unknown}
+      (path std::println)
+      (format-string "{total} {v} {area} {big}" : std::format_args))
+    (return : never (path std::exit_code::success : {unknown}))))
+--- stderr

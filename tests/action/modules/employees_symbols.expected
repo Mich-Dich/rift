@@ -1,0 +1,26 @@
+exit: 0
+--- stdout
+module employees
+  source: examples/employees.rifts
+  imports: std
+  struct employee
+    field name : std::string = ...
+    field age : u32 = ...
+    field salary : f64 = ...
+    method is_senior() -> bool
+    layout: name age salary
+  enum parse_error : u8
+    bad_line
+    bad_number
+  fn parse_line(std::str&) -> std::result<employee, parse_error>
+  fn load(std::filesystem::path&) -> std::result<std::darray<employee>, std::io_error>
+  fn main() -> std::exit_code
+--- stderr
+warning[W4002]: implicit allocation of a std::string from a string literal
+ --> examples/employees.rifts:8:26
+  |
+8 |     std::string name   = "";
+  |                          ^^ allocates
+  = note: write 'std::string::from("...")' to make the allocation visible
+
+0 errors, 1 warning

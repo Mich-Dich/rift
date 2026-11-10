@@ -1,0 +1,11 @@
+// RUN: riftc check %s
+// Name resolution errors in the human format.
+struct point { f64 x = 0.0; }
+
+f64 len(point p) {
+    f64 total = p.x;
+    {
+        f64 total = 0.0;
+    }
+    return totl + pont{}.x;
+}

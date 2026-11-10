@@ -1,0 +1,29 @@
+exit: 1
+--- stdout
+--- stderr
+error[E3028]: 'total' is already declared in this function
+ --> tests/action/modules/resolve_errors.rifts:8:13
+  |
+8 |         f64 total = 0.0;
+  |             ^^^^^ declared again
+  |
+6 |     f64 total = p.x;
+  |         -----
+  = note: earlier declaration here
+  = note: Rift has no shadowing; choose a different name
+
+error[E3020]: cannot find 'totl' in this scope
+  --> tests/action/modules/resolve_errors.rifts:10:12
+   |
+10 |     return totl + pont{}.x;
+   |            ^^^^ not found
+   = note: did you mean 'total'?
+
+error[E3021]: cannot find type 'pont'
+  --> tests/action/modules/resolve_errors.rifts:10:19
+   |
+10 |     return totl + pont{}.x;
+   |                   ^^^^ unknown type
+   = note: did you mean 'point'?
+
+3 errors, 0 warnings

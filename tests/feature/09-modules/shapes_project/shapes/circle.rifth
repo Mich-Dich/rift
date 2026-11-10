@@ -1,0 +1,8 @@
+// Directories become '::' in module names: this is module shapes::circle.
+import shapes::geometry;
+
+struct circle {
+    shapes::geometry::point center;
+    f64 radius = 1.0;
+    f64 area();
+}

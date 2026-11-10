@@ -1,0 +1,28 @@
+// feature 04: functions, parameters, call-site mut, main.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+void log(std::str message);                       // declaration (header style)
+
+std::result<employee, parse_error> parse_line(std::str line) {
+    return std::error(parse_error::bad_line);
+}
+
+void bump(mut u32& x) {
+    x += 1;
+}
+
+void by_value(mut u32 x, u32 y, employee& e, mut employee& m) { }
+
+u32 f(u32 x) { return x; }
+u32 f(u64 x) { return 0; }
+
+unsafe u32 read_register(usize address) { return 0; }
+extern "C" i32 puts(std::raw_ptr<u8> text);
+
+std::exit_code main(std::span<std::str> args) {
+    mut u32 counter = 0;
+    bump(mut counter);
+    take(move name);
+    copy(s.clone());
+    std::swap(mut a, mut b);
+    return std::exit_code::success;
+}

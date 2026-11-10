@@ -1,0 +1,13 @@
+// feature 18: lambdas and every capture form.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+void lambdas(std::string name) {
+    mut u32 counter = 0;
+    u32 threshold = 10;
+    auto inc  = [mut &counter]() { counter += 1; };
+    auto add  = [threshold](u32 x) { return x + threshold; };
+    auto init = [value = 10u32](u32 x) -> u32 { return x + value; };
+    auto own  = [move name](u32 x) { return std::format(f"{name}: {x}"); };
+    auto look = [&threshold, &name]() { return threshold; };
+    auto noop = []() { };
+    employees.retain([](employee& e) { return e.age >= 30; });
+}

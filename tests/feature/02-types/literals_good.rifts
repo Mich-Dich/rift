@@ -1,0 +1,25 @@
+// feature 02: literals take their type from context; every implicit conversion in the table works.
+import std;
+
+u64 widen(u32 a) { return cast<u64>(a); }
+void take_str(std::str s) { }
+
+void literals(u32 a, std::string owned) {
+    u32 x = 0;
+    u32 c = a + 1;                  // 1 becomes u32 from the other operand
+    u8  max = 255;
+    i8  min = -128;
+    i64 big = -9223372036854775808;
+    f64 half = 1.0 / 2.0;
+    f32 small = 0.5;
+    auto g = 5u32;
+    u32 sum = 1 + 2 * 3;            // the whole expression takes u32
+    u64 w = widen(7);               // parameter type is the context
+    bool flag = x == 0;
+    char ch = 'a';
+    std::str s = "hello";           // std::static_str -> std::str
+    std::static_str t = "config.toml";
+    take_str(owned);                // std::string -> std::str
+    take_str("literal");
+    u32 shifted = x << 3;
+}

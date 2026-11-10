@@ -1,0 +1,178 @@
+// A complete program using most of the language: it must check without any diagnostic.
+import std;
+
+enum token_kind : u8 {
+    number,
+    plus,
+    minus,
+    star,
+    end,
+}
+
+enum token : u8 {
+    number(f64),
+    op(token_kind),
+    end,
+}
+
+enum parse_error : u8 {
+    bad_char = 1,
+    empty,
+}
+
+struct cursor {
+    std::str text;
+    usize    pos = 0;
+
+    bool done() {
+        return this.pos >= this.text.len();
+    }
+
+    void advance(usize by) mut {
+        this.pos += by;
+    }
+}
+
+interface evaluator {
+    f64 apply(f64 lhs, f64 rhs);
+}
+
+struct adder : evaluator {
+    u32 uses = 0;
+    f64 apply(f64 lhs, f64 rhs) override {
+        return lhs + rhs;
+    }
+}
+
+open class shape {
+public:
+    std::string name;
+    virtual f64 area() abstract;
+    virtual u32 corners() {
+        return 0;
+    }
+}
+
+class square : shape {
+public:
+    f64 side = 1.0;
+    f64 area() override {
+        return this.side * this.side;
+    }
+    u32 corners() override {
+        return 4;
+    }
+}
+
+template<type T>
+T larger(T a, T b) {
+    return if (a > b) { a } else { b };
+}
+
+compile_time u32 square_of(u32 x) { return x * x; }
+compile_time u32 table_size = square_of(4);
+static u32 start = 10;
+
+f64 weight(token_kind k) {
+    return match (k) {
+        token_kind::plus  => 1.0,
+        token_kind::minus => 1.0,
+        token_kind::star  => 2.0,
+        _                 => 0.0,
+    };
+}
+
+std::result<u32, parse_error> count_tokens(mut cursor& c) {
+    mut u32 count = 0;
+    while (!c.done()) {
+        c.advance(1);
+        count += 1;
+        if (count > 1000) {
+            break;
+        }
+    }
+    if (count == 0) {
+        return std::error(parse_error::empty);
+    }
+    return std::ok(count);
+}
+
+u32 classify(u32 code) {
+    std::str label = match (code) {
+        200       => "ok",
+        400..=499 => "client",
+        x if x >= 500 => "server",
+        _         => "other",
+    };
+    return if (label.len() > 2) { 1 } else { 0 };
+}
+
+void bits(mut u32 flags, u32 n) {
+    flags |= bit(4);
+    flags &= ~bit(4);
+    flags ^= bit(n);
+    u32 mask = bit(0) | bit(3);
+    u64 wide = cast<u64>(mask) << 40;
+    u8 low = cast::truncate<u8>(flags);
+    i32 clamped = cast::saturate<i32>(3.9);
+    if (flags & mask) {
+        flags = flags +% 1;
+    }
+}
+
+u32 sum_to(u32 n) {
+    mut u32 total = 0;
+    for (u32 i : 0..n) {
+        if (i % 2 == 0) {
+            continue;
+        }
+        total += i;
+    }
+    for (u8 b : 0..=255) {
+        total += cast<u32>(b);
+    }
+    return total;
+}
+
+void pointers() {
+    mut u32 value = 5;
+    std::raw_ptr<mut u32> p = mut &value;
+    if (p) {
+        unsafe {
+            *p = 6;
+        }
+    }
+}
+
+std::exit_code main() {
+    mut cursor c = cursor{ .text = "1 + 2 * 3" };
+    u32 n = match (count_tokens(mut c)) {
+        std::ok(count) => count,
+        std::error(e) => {
+            std::eprintln(f"error: {e}");
+            return std::exit_code::failure;
+        },
+    };
+    adder a = adder{};
+    f64 r = a.apply(1.0, weight(token_kind::plus));
+    square sq = square{ .name = std::string::from("sq"), .side = 2.0 };
+    shape& s = sq;
+    f64 area = s.area();
+    u32 big = larger(n, start);
+    u64 big64 = larger<u64>(1, 2);
+    mut u32 counter = 0;
+    auto inc = [mut &counter]() { counter += 1; };
+    auto add = [n](u32 x) -> u32 { return x + n; };
+    u32 m = add(1);
+    token t = token::number(1.5);
+    f64 v = match (t) {
+        token::number(x) => x,
+        token::op(k) => weight(k),
+        token::end => 0.0,
+    };
+    _ = count_tokens(mut c);
+    bits(n, 3);
+    u32 total = sum_to(10) + classify(200) + table_size;
+    std::println(f"{total} {v} {area} {big}");
+    return std::exit_code::success;
+}

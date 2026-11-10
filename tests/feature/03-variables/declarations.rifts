@@ -1,0 +1,22 @@
+// feature 03: every valid declaration form.
+// STOP-AFTER: parse   (syntax test: names are not declared)
+compile_time usize buffer_size = 4096;
+static u32 counter_start = 10;
+static mut u32 raw_counter = 0;
+private static mut std::atomic<u32> request_count = std::atomic<u32>{};
+private compile_time u32 area = square(16);
+
+void locals() {
+    u32 x = 5;
+    mut u32 y = 5;
+    y = 6;
+    auto a = 5u32;
+    auto b = parse_line(line);
+    auto c = [](u32 v) { return v; };
+    u32 n = default;
+    std::darray<u32> v = default;
+    test t = test{ .x = 5 };
+    compile_time u32 local_constant = 7;
+    employee& first = list[0];
+    _ = compute();
+}

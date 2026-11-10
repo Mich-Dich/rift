@@ -1,0 +1,23 @@
+// feature 17: cast<T> is lossless only; lossy conversions are spelled out.
+import std;
+enum mode : u8 { a = 1, b }
+enum shape : u8 { circle(f64), square }
+
+void casts(u32 small, i32 s, f64 f, bool flag, mode m, shape sh) {
+    u64 wide  = cast<u64>(small);
+    i64 sw    = cast<i64>(small);
+    f64 asf   = cast<f64>(small);
+    u64 fromb = cast<u64>(flag);
+    u8  tag   = cast<u8>(m);
+    u8  a     = cast<u8>(small);              //~ error[E4090]: may lose data
+    u32 b     = cast<u32>(s);                 //~ error[E4090]
+    f32 c     = cast<f32>(f);                 //~ error[E4090]
+    u8  d     = cast::truncate<u8>(small);
+    u8  e     = cast::saturate<u8>(small);
+    i32 g     = cast::saturate<i32>(3.9);
+    f32 h     = cast::round<f32>(f);
+    u8  i     = cast::truncate<u8>(f);        //~ error[E4091]: cast::truncate cannot convert 'f64'
+    u8  j     = cast<u8>(sh);                 //~ error[E4091]: cannot convert 'shape'
+    u32 k     = cast::magic<u32>(small);      //~ error[E4092]
+    usize l   = cast::reinterpret<usize>(small);   //~ error[E4103]
+}

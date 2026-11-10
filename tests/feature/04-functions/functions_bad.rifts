@@ -1,0 +1,7 @@
+// feature 04: function syntax that Rift rejects.
+void with_default(u32 x = 5) { }     //~ error[E2024]: default arguments
+void generic(auto x) { }             //~ error[E2025]: 'auto' is not allowed
+fn old_style() { }                   //~ error[E2019]: 'fn' is not a keyword
+f64 geometry::distance(f64 a) { }    //~ error[E2013]: out-of-line definitions
+run_time u32 rt() { return 0; }      //~ error[E2018]
+void fine() { }

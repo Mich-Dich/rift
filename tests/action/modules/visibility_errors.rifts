@@ -1,0 +1,1 @@
+// RUN: riftc check --root=tests/feature/09-modules/visibility_project tests/feature/09-modules/visibility_project/main.rifts

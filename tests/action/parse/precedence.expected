@@ -1,0 +1,19 @@
+exit: 0
+--- stdout
+(fn f -> void
+  (block
+    (discard (- (+ (path a) (* (path b) (path c))) (path d)))
+    (discard (- (- (path a) (path b)) (path c)))
+    (discard (== (& (path flags) (path mask)) (int 0)))
+    (discard (| (path a) (^ (path b) (& (path c) (path d)))))
+    (discard (<< (path x) (+ (int 2) (int 1))))
+    (discard (|| (&& (< (path a) (path b)) (>= (path c) (path d))) (! (path e))))
+    (discard (* (- (path a)) (~ (path b))))
+    (discard (+ (deref (path p)) (addr (path q))))
+    (discard (.. (int 0) (+ (path n) (int 1))))
+    (discard (-% (+% (path a) (*% (path b) (path c))) (path d)))
+    (discard (.h (index (.g (? (call (path f) (path x)))) (path i))))
+    (discard (move (path list)))
+    (discard (* (+ (path a) (path b)) (path c)))
+    (discard (<=> (path a) (path b)))))
+--- stderr

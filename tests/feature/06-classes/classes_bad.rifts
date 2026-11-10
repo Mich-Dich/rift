@@ -1,0 +1,6 @@
+// feature 06/07: method marker conflicts.
+open class base {
+public:
+    virtual void f() override;       //~ error[E2023]
+    virtual void g();
+}

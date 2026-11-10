@@ -1,0 +1,4 @@
+// main returns void, std::exit_code or an integer.
+bool main() {                       //~ error[E4110]: main cannot return 'bool'
+    return true;
+}
