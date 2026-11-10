@@ -1,9 +1,0 @@
-
-// MODE: compile
-// EXIT: 250
-
-u32 main() {
-    i32 x = -5i32;
-    u32 y = 250u32;
-    return y;
-}

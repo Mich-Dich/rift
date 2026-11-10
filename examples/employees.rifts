@@ -1,0 +1,72 @@
+// employees.rifts - the v0.3 version of docs/example/language_design.cpp
+// Reads employees.csv next to the executable, keeps everyone aged 30+,
+// and prints them sorted by salary, highest first (same as original_code.cpp).
+
+import std;
+
+struct employee {
+    std::string name   = "";
+    u32         age    = 0;
+    f64         salary = 0.0;
+
+    bool is_senior() {
+        return this.age >= 30;
+    }
+}
+
+enum parse_error : u8 {
+    bad_line = 0,
+    bad_number,
+}
+
+std::result<employee, parse_error> parse_line(std::str& line) {
+    std::darray<std::str> parts = line.split(',');          // view type: stays local
+    if (parts.len() != 3) {
+        return std::error(parse_error::bad_line);
+    }
+
+    u32 age    = parts[1].parse<u32>().or_error(parse_error::bad_number)?;
+    f64 salary = parts[2].parse<f64>().or_error(parse_error::bad_number)?;
+
+    return std::ok(employee{
+        .name   = std::string::from(parts[0]),
+        .age    = age,
+        .salary = salary,
+    });
+}
+
+std::result<std::darray<employee>, std::io_error> load(std::filesystem::path& path) {
+    mut std::file in = std::file::open(path)?;               // mut: reading moves the cursor
+    mut std::darray<employee> employees = default;
+
+    for (std::str line : in.lines()) {
+        if (line.is_empty()) {
+            continue;
+        }
+        match (parse_line(line)) {
+            std::ok(e)    => employees.push(move e),
+            std::error(_) => std::eprintln(f"skipping bad line: {line}"),
+        }
+    }
+    return std::ok(move employees);
+}
+
+std::exit_code main() {
+    std::filesystem::path csv = std::filesystem::executable_dir() / "employees.csv";
+
+    mut std::darray<employee> employees = match (load(csv)) {
+        std::ok(list) => move list,
+        std::error(e) => {
+            std::eprintln(f"error: {e}");
+            return std::exit_code::failure;
+        },
+    };
+
+    employees.retain([](employee& e) { return e.is_senior(); });
+    employees.sort_by_key(std::sort_order::descending, [](employee& e) { return e.salary; });
+
+    for (employee& e : employees) {
+        std::println(f"{e.name:<20} {e.age:>3} {e.salary:>10.2}");
+    }
+    return std::exit_code::success;
+}

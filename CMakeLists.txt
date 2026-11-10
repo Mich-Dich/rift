@@ -26,7 +26,7 @@ endif()
 set_property(GLOBAL PROPERTY JOB_POOLS                                  link_pool=24)
 
 # Warnings -------------------------------------------------------------------------------------------------------------
-# The compiler itself should be warning-clean. These are strict on purpose — they catch the type-confusion and lifetime
+# The compiler itself should be warning-clean. These are strict on purpose - they catch the type-confusion and lifetime
 # bugs that matter for a compiler
 add_compile_options(
     -Wall

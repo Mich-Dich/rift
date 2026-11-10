@@ -1,9 +1,9 @@
 # Rift
 
-The Rift programming language — C++-inspired, but explicitly simpler,
+The Rift programming language - C++-inspired, but explicitly simpler,
 safer, and more consistent.
 
-**Status:** M0 — scaffolding. The `riftc` binary builds and the test
+**Status:** M0 - scaffolding. The `riftc` binary builds and the test
 harness runs; lexing and beyond land in M1+.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the milestone plan and

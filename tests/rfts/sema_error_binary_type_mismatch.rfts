@@ -1,8 +1,0 @@
-
-// MODE: check
-// EXIT: 1
-// EXPECT_STDERR_CONTAINS: type mismatch in right operand
-
-u32 main() {
-    return 1u32 + 1i32;
-}

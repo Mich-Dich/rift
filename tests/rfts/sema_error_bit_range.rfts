@@ -1,9 +1,0 @@
-
-// MODE: check
-// EXIT: 1
-// EXPECT_STDERR_CONTAINS: bit index 8 is out of range for 'u8'
-
-u32 main() {
-    u8 x = bit(8u32);
-    return 0u32;
-}

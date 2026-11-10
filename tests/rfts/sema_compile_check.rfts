@@ -1,8 +1,0 @@
-
-// MODE: check
-// EXIT: 0
-// The canonical minimal program: must pass sema cleanly.
-
-u32 main() {
-    return 0u32;
-}

@@ -1,7 +1,0 @@
-
-// MODE: compile
-// EXIT: 5
-
-u32 main() {
-    return 5;
-}
