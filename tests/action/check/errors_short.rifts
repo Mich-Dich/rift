@@ -1,0 +1,4 @@
+// RUN: riftc check --diagnostic-format=short %s
+u8 a = 0b2;
+char b = '';
+std::str c = "open

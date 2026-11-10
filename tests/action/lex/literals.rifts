@@ -1,0 +1,5 @@
+// RUN: riftc lex %s
+// Token dump shows decoded literal values and suffixes.
+0xFFu8 1_000 1.5e3f64 'é' '\u{41}' "a\tb" r"C:\x" f"{n}\n"
+/// documented
+_ x

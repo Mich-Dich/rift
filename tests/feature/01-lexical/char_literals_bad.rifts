@@ -1,0 +1,5 @@
+// feature 01: malformed character literals.
+char a = '';             //~ error[E1005]
+char b = 'ab';           //~ error[E1006]: more than one character
+char c = '\q';           //~ error[E1007]: unknown escape sequence '\q'
+char d = 'x              //~ error[E1004]

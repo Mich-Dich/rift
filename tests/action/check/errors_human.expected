@@ -1,0 +1,38 @@
+exit: 1
+--- stdout
+--- stderr
+error[E1009]: expected hexadecimal digits after '0x'
+ --> tests/action/check/errors_human.rifts:4:14
+  |
+4 | 	u8 tabbed = 0x;
+  | 	            ^^ no digits
+
+error[E1006]: character literal contains more than one character
+ --> tests/action/check/errors_human.rifts:5:11
+  |
+5 | 	char c = 'ab';
+  | 	         ^^^^ 2 characters
+  = note: use a string literal "..." for text
+
+error[E1007]: unknown escape sequence '\q'
+ --> tests/action/check/errors_human.rifts:6:22
+  |
+6 | 	std::str s = "naïve \q";
+  | 	                    ^^ unknown escape
+  = note: valid escapes are \n \t \r \0 \\ \" \' and \u{XXXX}
+
+error[E1013]: integer literal has float suffix 'f32'
+ --> tests/action/check/errors_human.rifts:7:12
+  |
+7 | 	auto f = 1f32;
+  | 	          ^^^ float suffix
+  = note: a float literal must contain '.' or an exponent; write 1.0f32
+
+warning[W1001]: '/*' inside a block comment; block comments do not nest
+  --> tests/action/check/errors_human.rifts:10:13
+   |
+10 | /* trailing /* comment */
+   |             ^^ this does not start a nested comment
+   = note: the comment that starts at 10:1 ends at the first '*/'
+
+4 errors, 1 warning

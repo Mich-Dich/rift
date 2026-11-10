@@ -1,0 +1,18 @@
+// feature 01/16: every operator and punctuation token.
+u32 a = b + c - d * e / f % g;
+u32 h = b +% c -% d *% e;
+u32 i = b & c | d ^ ~e;
+u32 j = b << 2 >> 1;
+bool k = !(a == b) && (a != b) || (a < b) && (a <= b) && (a > b) && (a >= b);
+std::ordering l = a <=> b;
+x += 1; x -= 1; x *= 2; x /= 2; x %= 3;
+x &= 1; x |= 2; x ^= 3; x <<= 1; x >>= 1;
+x +%= 1; x -%= 1; x *%= 2;
+for (usize i : 0..10) { }
+for (u8 b : 0..=255) { }
+auto f = [](u32 x) -> u32 { return x; };
+match (v) { std::ok(x) => x, _ => 0, };
+u32 m = parse()?;
+p->field;
+@required
+std::darray<std::darray<u32>> nested;

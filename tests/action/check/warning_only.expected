@@ -1,0 +1,11 @@
+exit: 0
+--- stdout
+--- stderr
+warning[W1001]: '/*' inside a block comment; block comments do not nest
+ --> tests/action/check/warning_only.rifts:3:10
+  |
+3 | /* outer /* inner */
+  |          ^^ this does not start a nested comment
+  = note: the comment that starts at 3:1 ends at the first '*/'
+
+0 errors, 1 warning

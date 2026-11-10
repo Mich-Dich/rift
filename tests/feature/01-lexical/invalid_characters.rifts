@@ -1,0 +1,6 @@
+// feature 01: characters that are not part of Rift's syntax.
+u32 $price = 5;          //~ error[E1001]: invalid character '$'
+u32 x = 1 # 2;           //~ error[E1001]: '#'
+u32 naïve = 3;           //~ error[E1001]: 'ï'
+u32 y = `5`;             //~ error[E1001]
+//~^ error[E1001]

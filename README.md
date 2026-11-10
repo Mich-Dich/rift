@@ -1,13 +1,10 @@
 # Rift
 
 The Rift programming language - C++-inspired, but explicitly simpler,
-safer, and more consistent.
+safer, and more consistent. The language design lives in [`docs/design/`](docs/design/README.md).
 
-**Status:** M0 - scaffolding. The `riftc` binary builds and the test
-harness runs; lexing and beyond land in M1+.
-
-See [`docs/roadmap.md`](docs/roadmap.md) for the milestone plan and
-[`docs/M0-scope.md`](docs/M0-scope.md) for what this milestone delivers.
+**Status:** M1 - lexer. `riftc` reads `.rifts`/`.rifth` files, tokenizes them per
+spec 01, and reports lexical errors with stable diagnostic codes. Parsing comes next.
 
 ## Building
 
@@ -23,34 +20,46 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
-The resulting binary is at `build/compiler/riftc`:
+The binary is `build/compiler/riftc`:
 
 ```bash
 $ ./build/compiler/riftc --version
-riftc 0.0.1 (M0)
+riftc 0.0.1
+$ ./build/compiler/riftc check examples/employees.rifts     # silent + exit 0 when clean
+$ ./build/compiler/riftc lex examples/compile_check.rifts   # token dump
+$ ./build/compiler/riftc explain E1003                      # what a diagnostic code means
 ```
 
 ## Testing
 
 ```bash
-ctest --test-dir build --output-on-failure
+scripts/test.sh                 # build + run unit, feature and action tests
+scripts/test.sh --suite feature # one suite
+scripts/test.sh lexer           # filter by name/path
+scripts/test.sh --update        # re-record golden files for action tests
 ```
 
-Or invoke the runner directly:
+| Suite | What | Where |
+|---|---|---|
+| unit | C++ tests of compiler internals | `tests/unit/test_*.cpp` |
+| feature | good/bad `.rifts` files per spec rule, inline `//~ error[E1009]` annotations | `tests/feature/<chapter>/` |
+| action | real `riftc` runs; stdout, stderr and exit code compared with golden files | `tests/action/**/*.rifts` + `.expected` |
 
-```bash
-python3 tests/run_tests.py --riftc build/compiler/riftc
-```
-
-The runner discovers both driver smoke tests (built in) and golden
-`.rfts` tests under `tests/rfts/`. Golden tests are empty until M4
-delivers codegen; the harness is ready for them.
+Details, file formats and the `XFAIL` workflow for not-yet-implemented features:
+[`docs/testing.md`](docs/testing.md). CTest runs the same suites:
+`ctest --test-dir build --output-on-failure`.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `compiler/` | The `riftc` binary. Will split into `librift` + `riftc` driver in M1. |
-| `tests/` | Test runner (`run_tests.py`) and golden inputs. |
-| `examples/` | Example `.rfts` programs. |
-| `docs/` | Milestone scope, roadmap. |
+| `compiler/include/rift/` | Public headers of `librift` (source map, diagnostics, tokens, lexer, driver) |
+| `compiler/include/rift/diagnostic_codes.def` | Every diagnostic code, in one table |
+| `compiler/include/rift/token_kinds.def` | Every token kind, keyword and operator |
+| `compiler/src/` | `librift` implementation |
+| `compiler/driver/main.cpp` | The `riftc` executable (thin wrapper around `rift::run_driver`) |
+| `tests/run_tests.py` | Test runner for all three suites |
+| `tests/unit/`, `tests/feature/`, `tests/action/` | The test suites |
+| `scripts/test.sh` | Build + test in one command |
+| `examples/` | Example `.rifts` programs |
+| `docs/design/` | Language specification (v0.3) |

@@ -1,0 +1,13 @@
+// feature 01: keywords, built-in types and identifiers.
+import std;
+
+compile_time usize buffer_size = 4096;
+
+open class shape {
+public:
+    virtual f64 area() abstract;
+}
+
+u32 Mixed_Case_Name_42 = 0;
+u32 in = 0;            // `in` was removed as a keyword and is a normal identifier now
+_ = compute();

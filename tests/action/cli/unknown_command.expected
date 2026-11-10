@@ -1,0 +1,5 @@
+exit: 2
+--- stdout
+--- stderr
+riftc: error: unknown command 'compile'
+Run 'riftc --help' for usage.

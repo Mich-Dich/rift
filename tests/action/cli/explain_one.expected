@@ -1,0 +1,4 @@
+exit: 0
+--- stdout
+E1003 (error): unterminated string literal
+--- stderr

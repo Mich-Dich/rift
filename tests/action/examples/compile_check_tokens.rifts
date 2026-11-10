@@ -1,0 +1,1 @@
+// RUN: riftc lex examples/compile_check.rifts

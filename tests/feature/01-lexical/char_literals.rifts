@@ -1,0 +1,7 @@
+// feature 01: character literals hold exactly one Unicode scalar value.
+char a = 'a';
+char b = '\n';
+char c = '\'';
+char d = '\u{1F600}';
+char e = 'é';
+char f = '\0';

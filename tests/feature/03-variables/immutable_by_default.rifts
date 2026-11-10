@@ -1,0 +1,10 @@
+// feature 03: variables are immutable unless declared mut; '=' is the only initializer.
+// XFAIL: needs the parser and name resolution (spec 03)
+u32 main() {
+    u32 x = 5;
+    mut u32 y = 5;
+    y = 6;
+    x = 6;               //~ error
+    u32 z;               //~ error
+    return 0;
+}

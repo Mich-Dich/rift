@@ -1,0 +1,4 @@
+// RUN: riftc check %s
+// Warnings are printed but the exit code stays 0.
+/* outer /* inner */
+u32 main() { return 0; }

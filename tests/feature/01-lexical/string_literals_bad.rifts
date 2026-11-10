@@ -1,0 +1,8 @@
+// feature 01: malformed string literals.
+std::str a = "unterminated       //~ error[E1003]: unterminated string literal
+std::str b = "bad \x41 escape";  //~ error[E1007]: unknown escape sequence '\x'
+std::str c = "\u{D800}";         //~ error[E1008]: not a Unicode scalar value
+std::str d = "\u{110000}";       //~ error[E1008]
+std::str e = "\u0041";           //~ error[E1008]: \u{XXXX}
+std::str f = r"raw              //~ error[E1003]: unterminated raw string literal
+std::println(f"open             //~ error[E1003]: unterminated format string literal

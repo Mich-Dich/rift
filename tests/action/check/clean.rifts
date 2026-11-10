@@ -1,0 +1,5 @@
+// RUN: riftc check %s
+// A clean file: no output, exit 0.
+u32 main() {
+    return 0;
+}

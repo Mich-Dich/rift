@@ -1,0 +1,3 @@
+// feature 01: block comments do not nest; a '/*' inside one is suspicious.
+/* outer /* inner */   //~ warning[W1001]: block comments do not nest
+u32 main() { return 0; }

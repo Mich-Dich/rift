@@ -1,0 +1,4 @@
+exit: 1
+--- stdout
+--- stderr
+riftc: error[E0002]: 'README.md': unsupported source file extension (expected .rifts or .rifth)

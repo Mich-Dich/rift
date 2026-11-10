@@ -1,0 +1,4 @@
+// feature 01: a block comment must be closed before the end of the file.
+u32 main() { return 0; }
+/* this comment never ends  //~ error[E1002]: unterminated block comment
+u32 other() { return 1; }

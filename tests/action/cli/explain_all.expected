@@ -1,0 +1,21 @@
+exit: 0
+--- stdout
+E0001  error    cannot read source file
+E0002  error    unsupported source file extension (expected .rifts or .rifth)
+E1001  error    invalid character in source
+E1002  error    unterminated block comment
+E1003  error    unterminated string literal
+E1004  error    unterminated character literal
+E1005  error    empty character literal
+E1006  error    character literal contains more than one character
+E1007  error    unknown escape sequence
+E1008  error    invalid unicode escape
+E1009  error    missing digits after integer base prefix
+E1010  error    invalid digit for the literal's base
+E1011  error    invalid literal suffix
+E1012  error    integer literal is too large
+E1013  error    float suffix on an integer literal
+E1014  error    missing digits in float exponent
+E1015  error    source is not valid UTF-8
+W1001  warning  '/*' inside a block comment (block comments do not nest)
+--- stderr

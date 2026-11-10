@@ -1,0 +1,11 @@
+// feature 01: integer literal forms.
+u32 a = 42;
+u32 b = 0xFF;
+u32 c = 0b1010;
+u32 d = 0o17;
+u32 e = 1_000_000;
+u32 f = 1_0_0_;          // '_' is allowed anywhere after the first digit
+auto g = 42u32;
+auto h = 0xFFu8;
+auto i = 7usize;
+auto j = 340282366920938463463374607431768211455u128;

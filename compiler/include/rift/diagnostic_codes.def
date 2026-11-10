@@ -1,0 +1,39 @@
+// Registry of every diagnostic the compiler can emit.
+//
+//   RIFT_DIAG(code, severity, title)
+//
+// Rules:
+//   * Codes are never reused or renumbered once released; retire a code by leaving it here
+//     with a "(retired)" title.
+//   * Ranges:  E0xxx driver / I/O      E1xxx lexer      E2xxx parser (M2)
+//              E3xxx names / modules    E4xxx types      E5xxx ownership / borrows
+//              Wxxxx warnings, same ranges.
+//   * The title is what `riftc explain <code>` prints. The message at the report site can be
+//     more specific.
+
+#ifndef RIFT_DIAG
+#error "define RIFT_DIAG(code, severity, title) before including diagnostic_codes.def"
+#endif
+
+// --- driver ---------------------------------------------------------------------------------
+RIFT_DIAG(E0001, error,   "cannot read source file")
+RIFT_DIAG(E0002, error,   "unsupported source file extension (expected .rifts or .rifth)")
+
+// --- lexer ----------------------------------------------------------------------------------
+RIFT_DIAG(E1001, error,   "invalid character in source")
+RIFT_DIAG(E1002, error,   "unterminated block comment")
+RIFT_DIAG(E1003, error,   "unterminated string literal")
+RIFT_DIAG(E1004, error,   "unterminated character literal")
+RIFT_DIAG(E1005, error,   "empty character literal")
+RIFT_DIAG(E1006, error,   "character literal contains more than one character")
+RIFT_DIAG(E1007, error,   "unknown escape sequence")
+RIFT_DIAG(E1008, error,   "invalid unicode escape")
+RIFT_DIAG(E1009, error,   "missing digits after integer base prefix")
+RIFT_DIAG(E1010, error,   "invalid digit for the literal's base")
+RIFT_DIAG(E1011, error,   "invalid literal suffix")
+RIFT_DIAG(E1012, error,   "integer literal is too large")
+RIFT_DIAG(E1013, error,   "float suffix on an integer literal")
+RIFT_DIAG(E1014, error,   "missing digits in float exponent")
+RIFT_DIAG(E1015, error,   "source is not valid UTF-8")
+
+RIFT_DIAG(W1001, warning, "'/*' inside a block comment (block comments do not nest)")

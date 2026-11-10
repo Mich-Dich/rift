@@ -1,0 +1,17 @@
+exit: 2
+--- stdout
+--- stderr
+usage: riftc <command> [options] [file]
+
+commands:
+  lex <file>        print the token stream of a .rifts/.rifth file
+  check <file>      check a file for errors (currently: lexing)
+  explain [code]    describe a diagnostic code, or list all codes
+
+options:
+  --diagnostic-format=human|short   diagnostic layout (default: human)
+  --color=auto|always|never         colored diagnostics (default: auto)
+  -h, --help                        show this help
+  -V, --version                     show the compiler version
+
+exit codes: 0 success, 1 errors in input, 2 bad command line, 3 internal error

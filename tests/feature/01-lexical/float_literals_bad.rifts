@@ -1,0 +1,4 @@
+// feature 01: malformed float literals.
+auto a = 1.0u32;         //~ error[E1011]: invalid suffix 'u32' on float literal
+f64 b = 1e;              //~ error[E1014]
+f64 c = 2.5e+;           //~ error[E1014]

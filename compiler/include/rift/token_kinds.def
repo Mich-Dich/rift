@@ -1,0 +1,94 @@
+// Every token kind, following spec 01-lexical.
+//
+//   RIFT_TOKEN(name, spelling)     special tokens and literals
+//   RIFT_KEYWORD(word)             keyword `word`            -> TokenKind::kw_word
+//   RIFT_TYPE_KEYWORD(word)        reserved built-in type    -> TokenKind::kw_word
+//   RIFT_PUNCT(name, spelling)     operators and punctuation
+//
+// Any macro left undefined by the includer defaults to RIFT_TOKEN.
+
+#ifndef RIFT_TOKEN
+#define RIFT_TOKEN(name, spelling)
+#endif
+#ifndef RIFT_KEYWORD
+#define RIFT_KEYWORD(word) RIFT_TOKEN(kw_##word, #word)
+#endif
+#ifndef RIFT_TYPE_KEYWORD
+#define RIFT_TYPE_KEYWORD(word) RIFT_KEYWORD(word)
+#endif
+#ifndef RIFT_PUNCT
+#define RIFT_PUNCT(name, spelling) RIFT_TOKEN(name, spelling)
+#endif
+
+// --- special --------------------------------------------------------------------------------
+RIFT_TOKEN(eof,                   "end of file")
+RIFT_TOKEN(error,                 "invalid token")
+RIFT_TOKEN(identifier,            "identifier")
+RIFT_TOKEN(underscore,            "_")
+RIFT_TOKEN(doc_comment,           "doc comment")
+
+// --- literals -------------------------------------------------------------------------------
+RIFT_TOKEN(int_literal,           "integer literal")
+RIFT_TOKEN(float_literal,         "float literal")
+RIFT_TOKEN(char_literal,          "character literal")
+RIFT_TOKEN(string_literal,        "string literal")
+RIFT_TOKEN(raw_string_literal,    "raw string literal")
+RIFT_TOKEN(format_string_literal, "format string literal")
+
+// --- keywords -------------------------------------------------------------------------------
+RIFT_KEYWORD(import)       RIFT_KEYWORD(struct)    RIFT_KEYWORD(class)     RIFT_KEYWORD(interface)
+RIFT_KEYWORD(enum)         RIFT_KEYWORD(template)  RIFT_KEYWORD(type)
+RIFT_KEYWORD(open)         RIFT_KEYWORD(virtual)   RIFT_KEYWORD(override)  RIFT_KEYWORD(abstract)
+RIFT_KEYWORD(operator)
+RIFT_KEYWORD(public)       RIFT_KEYWORD(protected) RIFT_KEYWORD(private)   RIFT_KEYWORD(static)
+RIFT_KEYWORD(extern)
+RIFT_KEYWORD(mut)          RIFT_KEYWORD(move)      RIFT_KEYWORD(this)      RIFT_KEYWORD(view)
+RIFT_KEYWORD(compile_time) RIFT_KEYWORD(run_time)  RIFT_KEYWORD(deduce)
+RIFT_KEYWORD(if)           RIFT_KEYWORD(else)      RIFT_KEYWORD(for)       RIFT_KEYWORD(while)
+RIFT_KEYWORD(break)        RIFT_KEYWORD(continue)  RIFT_KEYWORD(return)    RIFT_KEYWORD(match)
+RIFT_KEYWORD(true)         RIFT_KEYWORD(false)     RIFT_KEYWORD(nullptr)   RIFT_KEYWORD(default)
+RIFT_KEYWORD(auto)         RIFT_KEYWORD(cast)      RIFT_KEYWORD(bit)       RIFT_KEYWORD(unsafe)
+
+// --- built-in type names (reserved like keywords) -------------------------------------------
+RIFT_TYPE_KEYWORD(bool)    RIFT_TYPE_KEYWORD(char) RIFT_TYPE_KEYWORD(void) RIFT_TYPE_KEYWORD(never)
+RIFT_TYPE_KEYWORD(i8)      RIFT_TYPE_KEYWORD(i16)  RIFT_TYPE_KEYWORD(i32)  RIFT_TYPE_KEYWORD(i64)
+RIFT_TYPE_KEYWORD(i128)    RIFT_TYPE_KEYWORD(isize)
+RIFT_TYPE_KEYWORD(u8)      RIFT_TYPE_KEYWORD(u16)  RIFT_TYPE_KEYWORD(u32)  RIFT_TYPE_KEYWORD(u64)
+RIFT_TYPE_KEYWORD(u128)    RIFT_TYPE_KEYWORD(usize)
+RIFT_TYPE_KEYWORD(f32)     RIFT_TYPE_KEYWORD(f64)
+
+// --- punctuation ----------------------------------------------------------------------------
+// Note: `>>` is one token. The parser splits it when it closes two template argument lists.
+RIFT_PUNCT(l_paren,        "(")    RIFT_PUNCT(r_paren,        ")")
+RIFT_PUNCT(l_brace,        "{")    RIFT_PUNCT(r_brace,        "}")
+RIFT_PUNCT(l_bracket,      "[")    RIFT_PUNCT(r_bracket,      "]")
+RIFT_PUNCT(comma,          ",")    RIFT_PUNCT(semicolon,      ";")
+RIFT_PUNCT(colon,          ":")    RIFT_PUNCT(colon_colon,    "::")
+RIFT_PUNCT(dot,            ".")    RIFT_PUNCT(dot_dot,        "..")   RIFT_PUNCT(dot_dot_eq, "..=")
+RIFT_PUNCT(arrow,          "->")   RIFT_PUNCT(fat_arrow,      "=>")
+RIFT_PUNCT(question,       "?")    RIFT_PUNCT(at,             "@")
+
+RIFT_PUNCT(plus,           "+")    RIFT_PUNCT(minus,          "-")
+RIFT_PUNCT(star,           "*")    RIFT_PUNCT(slash,          "/")    RIFT_PUNCT(percent,    "%")
+RIFT_PUNCT(plus_percent,   "+%")   RIFT_PUNCT(minus_percent,  "-%")   RIFT_PUNCT(star_percent, "*%")
+RIFT_PUNCT(amp,            "&")    RIFT_PUNCT(pipe,           "|")    RIFT_PUNCT(caret,      "^")
+RIFT_PUNCT(tilde,          "~")    RIFT_PUNCT(bang,           "!")
+RIFT_PUNCT(shl,            "<<")   RIFT_PUNCT(shr,            ">>")
+RIFT_PUNCT(amp_amp,        "&&")   RIFT_PUNCT(pipe_pipe,      "||")
+
+RIFT_PUNCT(eq_eq,          "==")   RIFT_PUNCT(bang_eq,        "!=")
+RIFT_PUNCT(less,           "<")    RIFT_PUNCT(less_eq,        "<=")
+RIFT_PUNCT(greater,        ">")    RIFT_PUNCT(greater_eq,     ">=")
+RIFT_PUNCT(spaceship,      "<=>")
+
+RIFT_PUNCT(eq,             "=")
+RIFT_PUNCT(plus_eq,        "+=")   RIFT_PUNCT(minus_eq,       "-=")   RIFT_PUNCT(star_eq,    "*=")
+RIFT_PUNCT(slash_eq,       "/=")   RIFT_PUNCT(percent_eq,     "%=")
+RIFT_PUNCT(amp_eq,         "&=")   RIFT_PUNCT(pipe_eq,        "|=")   RIFT_PUNCT(caret_eq,   "^=")
+RIFT_PUNCT(shl_eq,         "<<=")  RIFT_PUNCT(shr_eq,         ">>=")
+RIFT_PUNCT(plus_percent_eq, "+%=") RIFT_PUNCT(minus_percent_eq, "-%=") RIFT_PUNCT(star_percent_eq, "*%=")
+
+#undef RIFT_TOKEN
+#undef RIFT_KEYWORD
+#undef RIFT_TYPE_KEYWORD
+#undef RIFT_PUNCT

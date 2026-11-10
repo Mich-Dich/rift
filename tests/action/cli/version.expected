@@ -1,0 +1,4 @@
+exit: 0
+--- stdout
+riftc 0.0.1
+--- stderr

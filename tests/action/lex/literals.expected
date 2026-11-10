@@ -1,0 +1,15 @@
+exit: 0
+--- stdout
+3:1     int_literal             0xFFu8  value=255  suffix=u8
+3:8     int_literal             1_000  value=1000
+3:14    float_literal           1.5e3f64  suffix=f64
+3:23    char_literal            'é'  value="é"
+3:27    char_literal            '\u{41}'  value="A"
+3:36    string_literal          "a\tb"  value="a\tb"
+3:43    raw_string_literal      r"C:\x"  value="C:\\x"
+3:51    format_string_literal   f"{n}\n"  value="{n}\n"
+4:1     doc_comment             /// documented  value=" documented"
+5:1     underscore              _
+5:3     identifier              x
+6:1     eof
+--- stderr

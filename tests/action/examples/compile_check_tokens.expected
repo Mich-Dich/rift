@@ -1,0 +1,13 @@
+exit: 0
+--- stdout
+5:1     kw_u32                  u32
+5:5     identifier              main
+5:9     l_paren                 (
+5:10    r_paren                 )
+5:12    l_brace                 {
+6:5     kw_return               return
+6:12    int_literal             0u32  value=0  suffix=u32
+6:16    semicolon               ;
+7:1     r_brace                 }
+8:1     eof
+--- stderr

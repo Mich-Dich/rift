@@ -1,0 +1,6 @@
+exit: 1
+--- stdout
+--- stderr
+tests/action/check/errors_short.rifts:2:10: error[E1010]: invalid digit '2' in base-2 literal
+tests/action/check/errors_short.rifts:3:10: error[E1005]: empty character literal
+tests/action/check/errors_short.rifts:4:14: error[E1003]: unterminated string literal

@@ -1,0 +1,8 @@
+// feature 01: malformed integer literals.
+u32 a = 0x;              //~ error[E1009]: expected hexadecimal digits
+u32 b = 0b102;           //~ error[E1010]: invalid digit '2' in base-2 literal
+u32 c = 0o19;            //~ error[E1010]
+auto d = 42u7;           //~ error[E1011]: invalid suffix 'u7'
+auto e = 42int;          //~ error[E1011]
+auto f = 1f32;           //~ error[E1013]: integer literal has float suffix
+auto g = 340282366920938463463374607431768211456u128;    //~ error[E1012]

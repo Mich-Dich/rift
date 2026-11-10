@@ -1,0 +1,4 @@
+exit: 1
+--- stdout
+--- stderr
+riftc: error[E0001]: cannot read 'tests/action/cli/this_file_does_not_exist.rifts': cannot open file

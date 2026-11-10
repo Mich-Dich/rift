@@ -1,0 +1,10 @@
+// RUN: riftc check %s
+// Full human-readable diagnostic layout (carets, labels, notes, summary).
+u32 main() {
+	u8 tabbed = 0x;
+	char c = 'ab';
+	std::str s = "naïve \q";
+	auto f = 1f32;
+	return 0;
+}
+/* trailing /* comment */
