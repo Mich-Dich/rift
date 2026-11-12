@@ -274,3 +274,30 @@ TEST_CASE("parser: stray code at file scope is reported once per run") {
     Parsed p("void f() { }\n}\nx = 1;\ny = 2;\nz(3);\nvoid g() { }\nw = 4;\n");
     CHECK_EQ(p.codes(), std::string("E2004 E2004"));
 }
+
+// --- f-strings (M6) -----------------------------------------------------------------------
+
+TEST_CASE("parser: f-strings split into text and holes") {
+    rift::SourceManager    sm;
+    rift::DiagnosticEngine diags;
+    rift::FileId id = sm.add("t.rifts", "void f() { g(f\"a\\t{x}{{b}} {y.z:>8.2x}!\"); }");
+    std::vector<rift::Token> tokens = rift::tokenize(sm.file(id), id, diags);
+    rift::ast::File file = rift::parse(sm.file(id), id, tokens, diags);
+    REQUIRE(!diags.has_errors());
+    auto& body = *file.decls[0]->as<rift::ast::FunctionDecl>().body;
+    auto& call = body.tail ? *body.tail : *body.statements[0]->as<rift::ast::ExprStmt>().expr;
+    auto& lit  = call.as<rift::ast::CallExpr>().args[0]->as<rift::ast::LiteralExpr>();
+    REQUIRE_EQ(lit.format_parts.size(), 5u);
+    CHECK_EQ(lit.format_parts[0].text, std::string("a\t"));
+    CHECK(lit.format_parts[1].expr != nullptr);
+    CHECK_EQ(lit.format_parts[2].text, std::string("{b} "));
+    const rift::ast::FormatSpec& spec = lit.format_parts[3].spec;
+    CHECK(spec.present);
+    CHECK_EQ(spec.align, '>');
+    CHECK_EQ(spec.width, 8);
+    CHECK_EQ(spec.precision, 2);
+    CHECK_EQ(spec.radix, 'x');
+    CHECK_EQ(lit.format_parts[4].text, std::string("!"));
+    // Hole spans point into the original source.
+    CHECK_EQ(sm.file(id).text().substr(lit.format_parts[1].expr->span.begin, 1), std::string_view("x"));
+}

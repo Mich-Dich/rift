@@ -2,6 +2,8 @@ exit: 0
 --- stdout
 E0001  error    cannot read source file
 E0002  error    unsupported source file extension (expected .rifts or .rifth)
+E0003  error    cannot run the C compiler
+E0004  error    cannot write the output file
 E1001  error    invalid character in source
 E1002  error    unterminated block comment
 E1003  error    unterminated string literal
@@ -46,6 +48,7 @@ E2026  error    lambda captures must be named
 E2027  error    enum needs an underlying tag type
 E2028  error    interface methods cannot have a body
 E2029  error    '_' can only be used in patterns and in '_ = expr;'
+E2030  error    malformed format string
 E3001  error    cannot find module
 E3002  error    import cycle
 E3003  error    module has no header and cannot be imported
@@ -133,6 +136,20 @@ E4130  error    enum tag type must be an integer type
 E4140  error    type has no default value
 E4150  error    result must be used
 E4160  error    cannot deduce template argument
+E4170  error    format spec does not fit the value's type
+E4180  error    wrong number of template arguments
+E5001  error    value of a non-copy type would be copied implicitly
+E5002  error    use of a moved value
+E5010  error    references cannot be stored in fields
+E5011  error    a field of view type needs a 'view' type
+E5012  error    a returned reference needs exactly one source
+E5013  error    returns a reference to a value that is destroyed
+E5020  error    the same value is passed as 'mut' and as another argument
+E5021  error    container changed while a loop borrows it
+E5022  error    value changed while a reference to it is in use
+E5030  error    type cannot be cloned
+E6001  error    not supported by code generation yet
+E6002  error    the program has no 'main' function
 W1001  warning  '/*' inside a block comment (block comments do not nest)
 W4001  warning  unreachable match arm
 W4002  warning  implicit allocation of std::string from a string literal

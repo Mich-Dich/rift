@@ -33,7 +33,7 @@ import  struct  class  interface  enum  template  type
 open  virtual  override  abstract  operator
 public  protected  private  static  extern
 mut  move  this  view
-compile_time  run_time  deduce
+compile_time  run_time  deduce  check
 if  else  for  while  break  continue  return  match
 true  false  nullptr  default  auto  cast  bit  unsafe
 ```

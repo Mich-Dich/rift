@@ -1,0 +1,5 @@
+// RUN: riftc run %s
+// main may not return a value the OS cannot represent as an exit status (spec 04).
+i32 main() {
+    return -1;
+}

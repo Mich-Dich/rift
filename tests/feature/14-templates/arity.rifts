@@ -1,0 +1,15 @@
+// A template type needs exactly its parameters as arguments (spec 14).
+
+template<type T>
+struct box {
+    T value;
+}
+
+template<type A, type B>
+struct pair {
+    A first;
+    B second;
+}
+
+void take_box(box<u32, u32> b) {}      //~ error[E4180]: 'box' takes 1 template argument, but 2 are given
+void take_pair(pair<u32> p) {}         //~ error[E4180]: 'pair' takes 2 template arguments, but 1 is given

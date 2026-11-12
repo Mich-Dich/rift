@@ -1,0 +1,9 @@
+exit: 0
+--- stdout
+explicit 4
+deduced 10
+nested 5
+signed -3
+sum 55
+sum again 10
+--- stderr

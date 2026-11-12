@@ -1,0 +1,16 @@
+// feature 19: f-strings are split into text and {expr:spec} holes; holes are resolved and
+// type checked, and the spec must fit the value's type.
+import std;
+
+struct point { u32 x = 0; }
+
+void ok(u32 n, i64 m, f64 f, char c, bool b, std::str s, point p) {
+    std::println(f"{n} {n:x} {n:>8} {m:+} {f:.2} {f:^10.3} {c:x} {b:<5} {s:>4} {p.x + 1} {{ }}");
+}
+
+void holes(u32 n, f64 f) {
+    std::println(f"{f:x}");                       //~ error[E4170]: cannot be used with 'f64'
+    std::println(f"{n:.3}");                      //~ error[E4170]: a precision cannot be used with 'u32'
+    std::println(f"{true:+}");                    //~ error[E4170]: '+' cannot be used with 'bool'
+    std::println(f"{7}");                         //~ error[E4001]: no type in a format string
+}

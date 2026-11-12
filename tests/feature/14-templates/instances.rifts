@@ -1,0 +1,17 @@
+// Template types are instantiated per argument list (spec 14). Errors inside an instance are
+// reported at the code that the instance was made from.
+
+template<type T>
+struct box {
+    T value;
+
+    T get() {
+        return this.value;
+    }
+}
+
+void main() {
+    box<u32> ok = box<u32>{ .value = 7 };
+    box<u32> bad = box<u32>{ .value = true };   //~ error[E4010]: expected 'u32', found 'bool'
+    u8 small = ok.get();                        //~ error[E4010]: expected 'u8', found 'u32'
+}

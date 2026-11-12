@@ -1,0 +1,65 @@
+// RUN: riftc run %s
+// Structs and classes: literals with defaults, methods, mut methods, references (spec 05, 06, 12).
+import std;
+
+struct vec2 {
+    f64 x = 0.0;
+    f64 y = 0.0;
+
+    f64 dot(vec2& other) {
+        return this.x * other.x + this.y * other.y;
+    }
+
+    void add(vec2& other) mut {
+        this.x += other.x;
+        this.y += other.y;
+    }
+
+    static vec2 unit_x() {
+        return vec2{ .x = 1.0 };
+    }
+}
+
+struct particle {
+    vec2 position = default;
+    vec2 velocity = vec2{ .x = 1.0, .y = 2.0 };
+    u32  id;
+}
+
+class counter {
+public:
+    u32 get() { return this.value; }
+    void bump(u32 by) mut { this.value += by; }
+private:
+    u32 value = 0;
+}
+
+void reset(mut u32& n) {
+    n = 0;
+}
+
+f64 largest(f64& a, f64& b) {
+    return if (a > b) { a } else { b };
+}
+
+void main() {
+    mut particle p = particle{ .id = 7 };
+    std::println(f"particle {p.id} at ({p.position.x}, {p.position.y}) moving ({p.velocity.x}, {p.velocity.y})");
+    p.position.add(p.velocity.clone());
+    p.position.add(vec2::unit_x());
+    std::println(f"moved to ({p.position.x}, {p.position.y}), dot {p.position.dot(p.velocity)}");
+    mut counter c = counter{};
+    c.bump(5);
+    c.bump(6);
+    std::println(f"counter {c.get()}");
+    mut u32 n = 99;
+    reset(mut n);
+    std::println(f"reset {n}, largest {largest(p.position.x, p.velocity.y)}");
+    vec2 copy = p.velocity;        // plain data is a copy type
+    vec2 zero = default;
+    std::println(f"copy {copy.x} zero {zero.x}");
+    match (p) {
+        particle{ .id = 7, .. } => std::println("matched id 7"),
+        _ => std::println("other"),
+    }
+}

@@ -1,0 +1,39 @@
+exit: 1
+--- stdout
+--- stderr
+error[E5012]: 'pick' returns 'std::str', which could borrow from 'a' or 'b'
+ --> tests/action/ownership/ownership_errors.rifts:9:1
+  |
+9 | std::str pick(std::str a, std::str b) { return a; }
+  | ^^^^^^^^ ambiguous source
+  = note: a returned reference must borrow from 'this' or from the only reference parameter
+
+error[E5002]: 'name' is used after it was moved
+  --> tests/action/ownership/ownership_errors.rifts:15:15
+   |
+15 |     sink(move name);
+   |               ^^^^ used after move
+   |
+13 |         sink(move name);
+   |              ---------
+   = note: moved here
+   = note: assign a new value to 'name' first, or move a '.clone()' instead
+
+error[E5001]: this field has type 'std::string', which is not a copy type
+  --> tests/action/ownership/ownership_errors.rifts:16:24
+   |
+16 |     std::string copy = staff[0].name;
+   |                        ^^^^^^^^^^^^^ would be copied
+   = note: a field cannot be moved out: use '.clone()', 'std::take(mut obj.field)' or 'std::replace(...)'
+
+error[E5021]: cannot call 'push' on 'staff' while the loop borrows it
+  --> tests/action/ownership/ownership_errors.rifts:18:9
+   |
+18 |         staff.push(e.clone());
+   |         ^^^^^ the loop holds a reference
+   |
+17 |     for (employee& e : staff) {
+   |     ---------------------------
+   = note: 'e' refers into 'staff' for the whole loop
+
+4 errors, 0 warnings

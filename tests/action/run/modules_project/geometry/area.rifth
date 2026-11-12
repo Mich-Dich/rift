@@ -1,0 +1,7 @@
+struct rect {
+    u32 w = 0;
+    u32 h = 0;
+}
+
+u32 of(rect& r);
+u32 doubled(rect& r);

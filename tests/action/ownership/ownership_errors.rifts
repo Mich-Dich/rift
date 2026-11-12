@@ -1,0 +1,20 @@
+// RUN: riftc check %s
+// Ownership errors in the human format: moves, borrows and returned references.
+import std;
+
+struct employee { std::string name; u32 age = 0; }
+
+void sink(std::string s) { }
+
+std::str pick(std::str a, std::str b) { return a; }
+
+void f(bool c, mut std::darray<employee> staff, std::string name) {
+    if (c) {
+        sink(move name);
+    }
+    sink(move name);
+    std::string copy = staff[0].name;
+    for (employee& e : staff) {
+        staff.push(e.clone());
+    }
+}

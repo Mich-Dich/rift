@@ -23,7 +23,9 @@
 | Filesystem | `std::filesystem::path`, `std::filesystem::executable_dir` |
 | Program | `std::exit_code` (`success`, `failure`), `std::env::raw_args`, `std::panic` |
 | Interfaces | `std::comparable`, `std::cloneable`, `std::formattable` |
-| Compile time | `std::is_integer`, `std::is_float`, `std::is_same`, `std::implements`, `std::size_of`, `std::align_of`, `std::compile_error` |
+| Compile time | `std::is_integer`, `std::is_float`, `std::is_same`, `std::implements`, `std::size_of`, `std::align_of`, `std::type_name` |
+| Build (see 24, 25) | `std::build::graph`, `std::build::mode`, `std::build::modes::debug/release/release_with_debug_info`, `std::build::current_mode`, `std::build::mode_is`, `std::build::setting` |
+| Diagnostics (see 23) | `std::compile_error`, `std::compile_warning`, `std::compile_note`, `std::source_location`, `std::location_of`, `std::is_compile_time`. There is no `std::assert`: use `run_time check` |
 | Sorting | `std::sort_order::ascending`, `std::sort_order::descending` |
 
 ### Container access

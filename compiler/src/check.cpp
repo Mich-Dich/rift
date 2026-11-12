@@ -1,6 +1,9 @@
 #include "rift/check.hpp"
 
 #include "rift/ast_printer.hpp"
+#include "rift/lexer.hpp"
+#include "rift/parser.hpp"
+#include "rift/resolve.hpp"
 #include "rift/types.hpp"
 
 #include <algorithm>
@@ -177,10 +180,12 @@ struct Place {
     const Symbol* local = nullptr;
 };
 
+class Instantiator;
+
 class Checker {
 public:
-    Checker(sema::Program& program, DiagnosticEngine& diags)
-        : program_(program), diags_(diags), tc_(*program.types) {}
+    Checker(sema::Program& program, DiagnosticEngine& diags, Instantiator* instantiator = nullptr)
+        : program_(program), diags_(diags), tc_(*program.types), instantiator_(instantiator) {}
 
     void run() {
         for (auto& [name, m] : program_.modules) {
@@ -189,6 +194,22 @@ public:
             if (m->source) check_file(m->source->ast);
         }
         if (program_.entry) check_main(*program_.entry);
+    }
+
+    /// Checks the members of a template instance (spec 14): `copy` is the instance's own copy of
+    /// the template's declaration, checked with the parameters replaced by their arguments.
+    void check_instance(Symbol* inst, Decl& copy) {
+        module_ = inst->module;
+        subst_  = inst->template_subst;
+        if (copy.kind == DeclKind::enum_) {
+            check_decl(copy, inst);
+            return;
+        }
+        if (copy.kind == DeclKind::function) {
+            check_decl(copy, nullptr);
+            return;
+        }
+        for (DeclPtr& m : copy.as<TypeDecl>().members) check_decl(*m, inst);
     }
 
 private:
@@ -203,48 +224,59 @@ private:
 
     // --- lowering written types -----------------------------------------------------------
 
+    /// A type written in the code being checked: template parameters are those of the instance
+    /// being checked (`subst_`), if any.
     const Type* lower(const TypeExpr& t, const std::map<const Symbol*, const Type*>* subst = nullptr) {
-        switch (t.kind) {
-        case TypeKind::auto_:
-        case TypeKind::deduce:
-        case TypeKind::function: return tc_.error();
-        case TypeKind::reference: {
-            const auto& r = t.as<ReferenceType>();
-            return tc_.reference(lower(*r.inner, subst), r.is_mut);
+        return tc_.lower(t, subst ? subst : &subst_);
+    }
+
+    /// The parameter substitution of the template instance that declares `s` (a member, payload
+    /// or alternative), or null outside instances.
+    static const std::map<const Symbol*, const Type*>* substitution_of(const Symbol* s) {
+        for (; s; s = s->parent) {
+            if (!s->template_subst.empty()) return &s->template_subst;
         }
-        case TypeKind::named: break;
+        return nullptr;
+    }
+
+    /// The alternative that `alt` stands for in the enum type `enum_type`: an instance of a template
+    /// enum has its own alternatives (spec 14). `alt` itself otherwise.
+    static Symbol* instance_alternative(Symbol* alt, const Type* enum_type) {
+        const Symbol* templ = alt->parent;
+        if (!templ || !templ->decl || !templ->decl->is_template || templ->template_of) return alt;
+        if (!enum_type || !enum_type->is(Kind::user) || enum_type->symbol->template_of != templ) return alt;
+        auto it = enum_type->symbol->members.find(alt->name);
+        return it == enum_type->symbol->members.end() ? alt : it->second.front();
+    }
+
+    /// The enum type that an alternative path names: `maybe<u32>::some` names `maybe<u32>`
+    /// (spec 14). A plain enum's alternative names the enum.
+    const Type* enum_type_of(const Symbol* alt, const Path& path) {
+        const Symbol* templ = alt->parent;
+        if (!templ || !templ->decl || !templ->decl->is_template || templ->template_of || path.segments.size() < 2) {
+            return tc_.user(templ);
         }
-        const auto& nt = t.as<NamedType>();
-        const auto& segs = nt.path.segments;
-        if (segs.size() == 1 && !nt.symbol) {
-            if (const Type* b = tc_.builtin(segs[0].name)) return b;
+        const PathSegment& seg = path.segments[path.segments.size() - 2];
+        std::vector<const Type*> args;
+        for (const TemplateArg& a : seg.template_args) args.push_back(a.type ? lower(*a.type) : tc_.error());
+        if (args.size() != templ->decl->template_params.size()) {
+            error(DiagCode::E4180, path.span,
+                  std::format("'{}' takes {} template argument{}, but {} {} given", templ->name,
+                              templ->decl->template_params.size(), templ->decl->template_params.size() == 1 ? "" : "s",
+                              args.size(), args.size() == 1 ? "is" : "are"),
+                  "wrong number of template arguments");
+            return tc_.error();
         }
-        if (nt.symbol) {
-            const Symbol* s = nt.symbol;
-            if (s->kind == SymbolKind::type_param) {
-                if (subst) {
-                    if (auto it = subst->find(s); it != subst->end()) return it->second;
-                }
-                return tc_.type_param(s);
-            }
-            if (s->is_type() && s->decl && !s->decl->is_template) return tc_.user(s);
-            return tc_.error();   // template types are not instantiated yet
-        }
-        if (!segs.empty() && segs[0].name == "std") {
-            if (segs.size() == 2 && segs[1].name == "raw_ptr" && segs[1].template_args.size() == 1 &&
-                segs[1].template_args[0].type) {
-                const TemplateArg& arg = segs[1].template_args[0];
-                return tc_.pointer(lower(*arg.type, subst), arg.is_mut);
-            }
-            const Type* ext = tc_.external(to_string(nt.path));
-            std::vector<const Type*> args;
-            for (const TemplateArg& a : segs.back().template_args) {
-                args.push_back(a.type ? lower(*a.type, subst) : tc_.error());
-            }
-            external_args_[ext] = args;
-            return ext;
-        }
-        return tc_.error();
+        return tc_.instance(templ, args);
+    }
+
+    /// A type written in the declaration of `owner` (a field, payload, method signature, ...),
+    /// which may belong to a template instance other than the code being checked (spec 14).
+    const Type* lower_owned(const Symbol* owner, const TypeExpr& t) { return tc_.lower(t, substitution_of(owner)); }
+
+    void set_local(sema::Symbol* sym, const Type* t) {
+        local_types_[sym] = t;
+        sym->type         = t;
     }
 
     const Type* type_of_symbol(const Symbol* s) {
@@ -254,8 +286,8 @@ private:
             auto it = local_types_.find(s);
             return it == local_types_.end() ? tc_.error() : it->second;
         }
-        case SymbolKind::global:
-        case SymbolKind::field: return lower(*s->decl->as<VariableDecl>().type);
+        case SymbolKind::global: return lower(*s->decl->as<VariableDecl>().type);
+        case SymbolKind::field: return lower_owned(s, *s->decl->as<VariableDecl>().type);
         case SymbolKind::alternative: return tc_.user(s->parent);
         default: return tc_.error();
         }
@@ -467,6 +499,30 @@ private:
         e.type = tc_.error();
     }
 
+    /// `{expr:spec}` in an f-string: the value needs a type, and the spec must fit it (spec 19).
+    void check_format_hole(FormatPart& part) {
+        Expr&       e = *part.expr;
+        const Type* t = types::strip_ref(infer(e));
+        if (t->is_untyped()) {
+            no_context(e, "in a format string");
+            return;
+        }
+        const FormatSpec& s = part.spec;
+        if (!s.present || t->is_unknown() || t->is(Kind::external) || t->is(Kind::user)) return;
+        auto bad = [&](std::string_view what, std::string_view fix) {
+            note(error(DiagCode::E4170, s.span, std::format("{} cannot be used with {}", what, quoted(t)),
+                       "does not fit the value"),
+                 std::string(fix));
+        };
+        if (s.radix && !t->is_integer() && !t->is(Kind::char_)) {
+            bad(std::format("'{}' (hex/binary/octal)", s.radix), "only integers can be written in another base");
+        } else if (s.precision >= 0 && !t->is_float()) {
+            bad("a precision", "precision applies to floats only");
+        } else if (s.plus && !t->is_numeric()) {
+            bad("'+'", "'+' applies to numbers only");
+        }
+    }
+
     // --- declarations ---------------------------------------------------------------------
 
     void check_file(ast::File& file) {
@@ -540,7 +596,7 @@ private:
         fn_.name            = fn.name;
         if (fn.is_unsafe) ++unsafe_depth_;
         for (Param& p : fn.params) {
-            if (p.symbol) local_types_[p.symbol] = lower(*p.type);
+            if (p.symbol) set_local(p.symbol, lower(*p.type));
         }
         infer_block(*fn.body);
 
@@ -630,7 +686,7 @@ private:
                     coerce(*v.init, declared);
                 }
             }
-            if (v.symbol) local_types_[v.symbol] = declared ? declared : tc_.error();
+            if (v.symbol) set_local(v.symbol, declared ? declared : tc_.error());
             return;
         }
         case StmtKind::assign: check_assign(s.as<AssignStmt>()); return;
@@ -791,8 +847,11 @@ private:
             const auto& lit = e.as<LiteralExpr>();
             if (!lit.suffix.empty()) {
                 const Type* t = tc_.builtin(lit.suffix);
-                if (t && t->is_integer() && !types::literal_fits(lit.int_value, false, t)) {
-                    note(error(DiagCode::E4002, e.span, std::format("{} does not fit in {}", lit.text, quoted(t)),
+                bool negative = negated_literal_;
+                negated_literal_ = false;
+                if (t && t->is_integer() && !types::literal_fits(lit.int_value, negative, t)) {
+                    note(error(DiagCode::E4002, e.span,
+                               std::format("{}{} does not fit in {}", negative ? "-" : "", lit.text, quoted(t)),
                                "out of range"),
                          std::format("{} holds {}", quoted(t), types::integer_range(t)));
                 }
@@ -809,7 +868,10 @@ private:
         case ExprKind::bool_literal: return set(e, tc_.bool_());
         case ExprKind::nullptr_literal: return set(e, tc_.nullptr_());
         case ExprKind::string_literal: {
-            const auto& lit = e.as<LiteralExpr>();
+            auto& lit = e.as<LiteralExpr>();
+            for (FormatPart& part : lit.format_parts) {
+                if (part.expr) check_format_hole(part);
+            }
             return set(e, lit.token_kind == TokenKind::format_string_literal ? tc_.external("std::format_args")
                                                                               : tc_.static_str());
         }
@@ -838,9 +900,7 @@ private:
         case ExprKind::call: return infer_call(e.as<CallExpr>());
         case ExprKind::index: {
             auto& i = e.as<IndexExpr>();
-            infer(*i.object);
-            infer(*i.index);
-            return set(e, tc_.error());   // containers are library types
+            return set(e, infer_index(i));
         }
         case ExprKind::member: return infer_member(e.as<MemberExpr>());
         case ExprKind::try_: infer(*e.as<TryExpr>().operand); return set(e, tc_.error());
@@ -911,7 +971,11 @@ private:
         switch (s->kind) {
         case SymbolKind::local:
         case SymbolKind::global: return set(pe, type_of_symbol(s));
-        case SymbolKind::alternative: return set(pe, tc_.user(s->parent));
+        case SymbolKind::alternative: {
+            const Type* et = enum_type_of(s, pe.path);
+            pe.symbol      = instance_alternative(pe.symbol, et);
+            return set(pe, et);
+        }
         case SymbolKind::function:
         case SymbolKind::method:
             note(error(DiagCode::E4073, pe.span, std::format("'{}' is a function; call it", s->name), "not called"),
@@ -996,12 +1060,12 @@ private:
             if (!f || !f->is_operator || f->name != op) return nullptr;
             std::size_t want = is_method ? 1 : 2;
             if (f->params.size() != want) return nullptr;
-            const Type* first = is_method ? l : lower(*f->params[0].type);
-            const Type* second = lower(*f->params[want - 1].type);
+            const Type* first = is_method ? l : lower_owned(s, *f->params[0].type);
+            const Type* second = lower_owned(s, *f->params[want - 1].type);
             if (!is_method && assign_cost(l, first) < 0) return nullptr;
             if (r && assign_cost(r, second) < 0) return nullptr;
             if (f->is_defaulted && op == "==") return tc_.bool_();
-            return f->result ? lower(*f->result) : tc_.void_();
+            return f->result ? lower_owned(s, *f->result) : tc_.void_();
         };
         if (l->is(Kind::user)) {
             if (auto it = l->symbol->members.find(std::string(op)); it != l->symbol->members.end()) {
@@ -1141,7 +1205,12 @@ private:
     }
 
     const Type* infer_unary(UnaryExpr& u) {
-        const Type* t = infer(*u.operand);
+        // `-128i8`: a suffixed literal under '-' is range-checked with its sign.
+        bool negated_literal = u.op == UnaryOp::negate && u.operand->kind == ExprKind::int_literal &&
+                               !u.operand->as<LiteralExpr>().suffix.empty();
+        negated_literal_      = negated_literal;
+        const Type* t         = infer(*u.operand);
+        negated_literal_      = false;
         const Type* s = types::strip_ref(t);
         switch (u.op) {
         case UnaryOp::negate:
@@ -1270,7 +1339,7 @@ private:
             return set(m, tc_.error());
         }
         if (mem->kind != SymbolKind::field) return set(m, tc_.error());
-        return set(m, lower(*mem->decl->as<VariableDecl>().type));
+        return set(m, lower_owned(mem, *mem->decl->as<VariableDecl>().type));
     }
 
     // --- calls ----------------------------------------------------------------------------
@@ -1344,8 +1413,12 @@ private:
             }
             if (c.undeducible && c.subst.count(syms.empty() ? nullptr : syms[0])) c.undeducible = false;
         }
-        for (const Param& p : f.params) c.params.push_back(lower(*p.type, &c.subst));
-        c.result = f.result ? (f.result->kind == TypeKind::deduce ? tc_.error() : lower(*f.result, &c.subst)) : tc_.void_();
+        // A member of a template instance uses its parameters (spec 14); a function template's are deduced.
+        const std::map<const Symbol*, const Type*>* owner = f.is_template ? nullptr : substitution_of(s);
+        for (const Param& p : f.params) c.params.push_back(owner ? tc_.lower(*p.type, owner) : lower(*p.type, &c.subst));
+        c.result = f.result ? (f.result->kind == TypeKind::deduce ? tc_.error()
+                               : owner ? tc_.lower(*f.result, owner) : lower(*f.result, &c.subst))
+                            : tc_.void_();
         return c;
     }
 
@@ -1377,6 +1450,29 @@ private:
     static const Expr& strip_marker(const Expr& e) {
         if (e.kind == ExprKind::unary && e.as<UnaryExpr>().op == UnaryOp::mut_marker) return *e.as<UnaryExpr>().operand;
         return e;
+    }
+
+    /// The function a call to `chosen` runs (spec 14): for a function template, its instance for the
+    /// deduced arguments. Arguments that are still unknown (inside a template that is not instantiated)
+    /// keep the template itself. Null, after reporting, when a parameter could not be deduced.
+    Symbol* call_target(const Candidate& chosen, Span span, std::string_view display) {
+        if (!chosen.decl->is_template) return chosen.symbol;
+        std::vector<const Symbol*> syms = template_symbols(*chosen.decl);
+        std::vector<const Type*>   args;
+        for (const Symbol* p : syms) {
+            auto it = p ? chosen.subst.find(p) : chosen.subst.end();
+            if (it == chosen.subst.end()) {
+                std::string name = p ? p->name : std::string("?");
+                error(DiagCode::E4160, span, std::format("cannot deduce template parameter '{}' of '{}'", name, display),
+                      "cannot deduce");
+                return nullptr;
+            }
+            args.push_back(it->second);
+        }
+        for (const Type* a : args) {
+            if (a->is_unknown()) return chosen.symbol;
+        }
+        return instantiate_function(chosen.symbol, args);
     }
 
     /// Picks an overload, reports problems, coerces the arguments. Returns the chosen symbol.
@@ -1517,7 +1613,10 @@ private:
                 return set(c, tc_.error());   // std::... and unresolved names
             }
             if (s->kind == SymbolKind::alternative) {
-                const Type* payload = s->alternative->payload ? lower(*s->alternative->payload) : nullptr;
+                const Type* et      = enum_type_of(s, pe.path);
+                Symbol*     alt     = instance_alternative(pe.symbol, et);
+                pe.symbol           = alt;
+                const Type* payload = alt->alternative->payload ? lower_owned(alt, *alt->alternative->payload) : nullptr;
                 if (payload) {
                     if (args.size() != 1) {
                         error(DiagCode::E4030, c.span,
@@ -1527,8 +1626,8 @@ private:
                         check_argument(*args[0], payload);
                     }
                 }
-                callee.type = tc_.user(s->parent);
-                return set(c, tc_.user(s->parent));
+                callee.type = et;
+                return set(c, et);
             }
             if (s->kind == SymbolKind::function || s->kind == SymbolKind::method) {
                 std::vector<Symbol*> overloads;
@@ -1540,10 +1639,12 @@ private:
                 for (Symbol* o : overloads) cands.push_back(make_candidate(o, args, &pe.path.segments.back()));
                 const Candidate* chosen = resolve_overload(cands, args, c.span, ast::to_string(pe.path));
                 if (!chosen) return set(c, tc_.error());
-                pe.symbol   = chosen->symbol;
+                Symbol* target = call_target(*chosen, c.span, ast::to_string(pe.path));
+                if (!target) return set(c, tc_.error());
+                pe.symbol   = target;
                 callee.type = nullptr;   // functions are not values
-                check_compile_time_call(chosen->symbol, c.span);
-                check_unsafe_call(chosen->symbol, c.span);
+                check_compile_time_call(target, c.span);
+                check_unsafe_call(target, c.span);
                 return set(c, chosen->result);
             }
             if (s->kind == SymbolKind::local || s->kind == SymbolKind::global) {
@@ -1576,8 +1677,31 @@ private:
             }
             if (!t->is(Kind::user)) {
                 callee.type = tc_.error();
+                if (types::is_mutating_library_method(t, name)) {
+                    Place p = place_of(*me.object);
+                    if (p.is_place && !p.is_mutable && !p.is_temporary) {
+                        if (p.via_this) {
+                            note(error(DiagCode::E4021, c.span,
+                                       std::format("'{}' changes the container; 'this' is immutable in a non-mut method", name),
+                                       "'this' is immutable here"),
+                                 std::format("add 'mut' after the parameter list: '{}(...) mut'", fn_.name));
+                        } else {
+                            Diagnostic& d = error(DiagCode::E4022, c.span,
+                                                  std::format("'{}' changes {}, but '{}' is not mutable", name, quoted(t), p.name),
+                                                  "immutable receiver");
+                            if (p.local) note(d, std::format("declare it 'mut {} {}'", types::to_string(type_of_symbol(p.local)),
+                                                             p.local->name),
+                                              p.local->span);
+                        }
+                    }
+                }
                 for (Expr* a : args) {
                     if (a->type && a->type->is_untyped() && a->type != tc_.untyped_default()) settle(*a, tc_.error());
+                }
+                // A few string methods are known before the library exists (the backend implements them).
+                if (args.empty() && (t->is(Kind::static_str) || (t->is(Kind::external) && t->name == "std::str"))) {
+                    if (name == "len") return set(c, tc_.builtin("usize"));
+                    if (name == "is_empty") return set(c, tc_.bool_());
                 }
                 return set(c, tc_.error());
             }
@@ -1588,14 +1712,21 @@ private:
                 methods = find_methods(t->symbol, name);
             }
             callee.type = nullptr;
+            if (methods.empty() && name == "clone" && args.empty() &&
+                (t->is_user(SymbolKind::struct_) || t->is_user(SymbolKind::enum_))) {
+                return set(c, t);   // provided automatically (spec 05); cloneability is checked in M5
+            }
             if (methods.empty()) {
                 bool    opaque = false;
                 Symbol* other  = find_member(t->symbol, name, opaque);
                 if (other) {
                     error(DiagCode::E4033, me.name.span, std::format("'{}' is a field, not a method", name), "not callable");
                 } else if (!opaque) {
-                    error(DiagCode::E4070, me.name.span, std::format("{} has no method '{}'", quoted(t), name),
-                          "unknown method");
+                    Diagnostic& d = error(DiagCode::E4070, me.name.span, std::format("{} has no method '{}'", quoted(t), name),
+                                          "unknown method");
+                    if (name == "clone" && t->is_user(SymbolKind::class_)) {
+                        note(d, "classes implement 'clone()' themselves (interface std::cloneable); structs get it automatically");
+                    }
                 }
                 return set(c, tc_.error());
             }
@@ -1679,7 +1810,7 @@ private:
         };
         if (v.empty()) {
             if (from->is_user(SymbolKind::enum_)) {
-                const Type* tag = lower(*from->symbol->decl->as<EnumDecl>().tag_type);
+                const Type* tag = lower_owned(from->symbol, *from->symbol->decl->as<EnumDecl>().tag_type);
                 if (enum_has_payload(from->symbol)) invalid("enums with payloads have no tag value");
                 else if (tag != to && !lossless(tag, to)) invalid(std::format("the tag type is {}", quoted(tag)));
                 return c.type;
@@ -1768,7 +1899,7 @@ private:
             }
             bool    opaque = false;
             Symbol* field  = find_member(t->symbol, f.name, opaque);
-            if (field && field->kind == SymbolKind::field) coerce(*f.value, lower(*field->decl->as<VariableDecl>().type));
+            if (field && field->kind == SymbolKind::field) coerce(*f.value, lower_owned(field, *field->decl->as<VariableDecl>().type));
         }
         return set(sl, t);
     }
@@ -1785,7 +1916,7 @@ private:
                     no_context(*cap.init, "(an init-capture needs a typed value)");
                     t = tc_.error();
                 }
-                if (cap.symbol) local_types_[cap.symbol] = t;
+                if (cap.symbol) set_local(cap.symbol, t);
             } else if (cap.symbol) {
                 // Same type as the captured local; reference captures are references.
                 const Type* outer = tc_.error();
@@ -1793,12 +1924,12 @@ private:
                     if (sym->name == cap.name && sym != cap.symbol && sym->span.begin < cap.span.begin) outer = ty;
                 }
                 bool ref = cap.kind == CaptureKind::ref || cap.kind == CaptureKind::mut_ref;
-                local_types_[cap.symbol] = ref ? tc_.reference(types::strip_ref(outer), cap.kind == CaptureKind::mut_ref)
-                                               : types::strip_ref(outer);
+                set_local(cap.symbol, ref ? tc_.reference(types::strip_ref(outer), cap.kind == CaptureKind::mut_ref)
+                                               : types::strip_ref(outer));
             }
         }
         for (Param& p : l.params) {
-            if (p.symbol) local_types_[p.symbol] = lower(*p.type);
+            if (p.symbol) set_local(p.symbol, lower(*p.type));
         }
         infer_block(*l.body);
         fn_ = saved;
@@ -1860,11 +1991,41 @@ private:
         return seen.size() > 1;
     }
 
+    /// `c[i]` on the std containers: sequences take a 'usize' index, maps their key type.
+    /// Everything else is a library type the checker does not know (unknown, never an error).
+    const Type* infer_index(IndexExpr& i) {
+        const Type* obj = types::strip_ref(infer(*i.object));
+        const Type* idx = infer(*i.index);
+        const Type* key = nullptr;
+        const Type* el  = tc_.error();
+        if (obj->is(Kind::external)) {
+            std::string_view                 base = obj->external_base();
+            const std::vector<const Type*>* args = tc_.external_args(obj);
+            if (args && !args->empty() && (base == "std::darray" || base == "std::array" || base == "std::span")) {
+                key = tc_.builtin("usize");
+                el  = (*args)[0];
+            } else if (args && args->size() >= 2 && (base == "std::hash_map" || base == "std::tree_map")) {
+                key = (*args)[0];
+                el  = (*args)[1];
+            }
+        }
+        if (!key) {
+            if (idx->is_untyped()) settle(*i.index, tc_.error());
+            return tc_.error();
+        }
+        if (idx->is_untyped()) {
+            settle(*i.index, key);
+        } else if (!idx->is_unknown() && !key->is_unknown() && types::strip_ref(idx) != key) {
+            mismatch(i.index->span, idx, key, " (the index)");
+        }
+        return el;
+    }
+
     const Type* infer_for(ForExpr& f) {
         const Type* it   = infer(*f.iterable);
         const Type* var  = lower(*f.type);
         const Type* sit  = types::strip_ref(it);
-        if (f.symbol) local_types_[f.symbol] = var;
+        if (f.symbol) set_local(f.symbol, var);
         if (sit->is(Kind::range)) {
             const Type* el = sit->inner;
             if (el->is_untyped()) {
@@ -1914,9 +2075,9 @@ private:
 
     /// The payload type of std::ok/error/some patterns, from the subject's template arguments.
     const Type* std_payload(const Type* s, const std::string& alt) {
-        auto it = external_args_.find(s);
-        if (it == external_args_.end()) return tc_.error();
-        const auto& args = it->second;
+        const std::vector<const Type*>* found = tc_.external_args(s);
+        if (!found) return tc_.error();
+        const auto& args = *found;
         std::string_view base = s->external_base();
         if (base == "std::result" && args.size() == 2) return alt == "ok" ? args[0] : alt == "error" ? args[1] : tc_.error();
         if (base == "std::option" && args.size() == 1 && alt == "some") return args[0];
@@ -1931,7 +2092,7 @@ private:
             auto& b = p.as<BindingPattern>();
             if (b.symbol) {
                 b.symbol->is_mut = mut_ref;
-                local_types_[b.symbol] = s;
+                set_local(b.symbol, s);
             }
             return;
         }
@@ -1977,6 +2138,8 @@ private:
             const Symbol* alt = ep.symbol;
             const Type*   payload = tc_.error();
             if (alt && alt->kind == SymbolKind::alternative) {
+                ep.symbol      = instance_alternative(ep.symbol, s);
+                alt            = ep.symbol;
                 const Type* et = tc_.user(alt->parent);
                 if (!s->is_unknown() && s != et) {
                     error(DiagCode::E4061, ep.path.span,
@@ -1984,7 +2147,7 @@ private:
                                       quoted(et), quoted(s)),
                           "wrong enum");
                 }
-                if (alt->alternative->payload) payload = lower(*alt->alternative->payload);
+                if (alt->alternative->payload) payload = lower_owned(alt, *alt->alternative->payload);
             } else if (!alt && s->is(Kind::external)) {
                 payload = std_payload(s, ep.path.segments.back().name);
             }
@@ -2001,7 +2164,7 @@ private:
                 if (type) {
                     bool    opaque = false;
                     Symbol* field  = find_member(type, f.name, opaque);
-                    if (field && field->kind == SymbolKind::field) ft = lower(*field->decl->as<VariableDecl>().type);
+                    if (field && field->kind == SymbolKind::field) ft = lower_owned(field, *field->decl->as<VariableDecl>().type);
                 }
                 check_pattern(*f.pattern, ft, mut_ref);
             }
@@ -2009,6 +2172,15 @@ private:
             return;
         }
         }
+    }
+
+    /// Matches every value: `_`, a binding, or a struct pattern made only of such patterns.
+    static bool irrefutable(const Pattern& p) {
+        if (p.kind == PatternKind::wildcard || p.kind == PatternKind::binding) return true;
+        if (p.kind != PatternKind::struct_) return false;
+        const auto& sp = p.as<StructPattern>();
+        return std::all_of(sp.fields.begin(), sp.fields.end(),
+                           [](const FieldPattern& f) { return !f.pattern || irrefutable(*f.pattern); });
     }
 
     /// Does this arm match every value on its own (no guard, `_` or a binding)?
@@ -2052,18 +2224,13 @@ private:
             const Pattern& p = *arm.pattern;
             if (p.kind == PatternKind::enum_alternative) {
                 const auto& ep = p.as<EnumPattern>();
-                bool full_payload = !ep.payload || ep.payload->kind == PatternKind::wildcard ||
-                                    ep.payload->kind == PatternKind::binding;
+                bool full_payload = !ep.payload || irrefutable(*ep.payload);
                 if (full_payload) seen.insert(ep.path.segments.back().name);
             } else if (p.kind == PatternKind::literal && s->is(Kind::bool_)) {
                 const Expr& lit = *p.as<LiteralPattern>().literal;
                 if (lit.kind == ExprKind::bool_literal) seen.insert(lit.as<LiteralExpr>().bool_value ? "true" : "false");
             } else if (p.kind == PatternKind::struct_) {
-                const auto& sp = p.as<StructPattern>();
-                bool all_free = std::all_of(sp.fields.begin(), sp.fields.end(), [](const FieldPattern& f) {
-                    return f.pattern->kind == PatternKind::wildcard || f.pattern->kind == PatternKind::binding;
-                });
-                if (all_free) return;   // a struct pattern with only bindings matches everything
+                if (irrefutable(p)) return;   // a struct pattern with only bindings matches everything
             }
         }
         if (all.empty()) {
@@ -2092,16 +2259,100 @@ private:
     Module*                                             module_ = nullptr;
     FunctionState                                       fn_;
     int                                                 unsafe_depth_ = 0;
+    bool                                                negated_literal_ = false;   // the next int literal sits under a unary minus
     std::map<const Symbol*, const Type*>                local_types_;
-    std::map<const Type*, std::vector<const Type*>>     external_args_;
     std::set<const Expr*>                               branch_conflicts_;
+    std::map<const Symbol*, const Type*>                subst_;   // template parameters of the instance being checked
+    Instantiator*                                       instantiator_ = nullptr;   // makes function instances
+
+    /// The instance of the function template `templ` for `args` (spec 14), defined after Instantiator.
+    Symbol* instantiate_function(const Symbol* templ, const std::vector<const Type*>& args);
 };
+
+/// Makes the instances of template types (spec 14). An instance is a copy of the template's
+/// declaration, re-parsed from its source text so that it has an AST of its own; it is resolved
+/// in the template's module and checked with the parameters replaced by the arguments. Instances
+/// are created on demand, wherever a type `box<u32>` is lowered.
+class Instantiator {
+public:
+    Instantiator(sema::Program& program, const SourceManager& sources, DiagnosticEngine& diags)
+        : program_(program), sources_(sources), diags_(diags) {}
+
+    const Type* instantiate(const Symbol* templ, const std::vector<const Type*>& args) {
+        auto key = std::make_pair(templ, args);
+        if (auto it = memo_.find(key); it != memo_.end()) return it->second;
+        Decl* copy = copy_of(*templ);
+        if (!copy) return program_.types->error();
+        std::vector<Symbol*> params;
+        Symbol*              inst = resolve_instance(program_, diags_, templ, *copy, params);
+        if (params.size() != args.size()) return program_.types->error();
+        inst->template_of    = templ;
+        inst->instance_index = ++count_[templ];
+        for (std::size_t i = 0; i < params.size(); ++i) inst->template_subst[params[i]] = args[i];
+        const Type* t = program_.types->user(inst);
+        memo_[key]    = t;
+        program_.instances.push_back(inst);
+        program_.instance_copies.push_back(copy);
+        Checker(program_, diags_, this).check_instance(inst, *copy);
+        return t;
+    }
+
+    /// The instance of the function template `templ` for `args`, made once per argument list.
+    Symbol* instantiate_function(const Symbol* templ, const std::vector<const Type*>& args) {
+        auto key = std::make_pair(templ, args);
+        if (auto it = fn_memo_.find(key); it != fn_memo_.end()) return it->second;
+        Decl* copy = copy_of(*templ);
+        if (!copy || copy->kind != DeclKind::function) return nullptr;
+        std::vector<Symbol*> params;
+        Symbol*              inst = resolve_function_instance(program_, diags_, templ, copy->as<FunctionDecl>(), params);
+        if (params.size() != args.size()) return nullptr;
+        inst->template_of    = templ;
+        inst->instance_index = ++count_[templ];
+        for (std::size_t i = 0; i < params.size(); ++i) inst->template_subst[params[i]] = args[i];
+        fn_memo_[key] = inst;   // before checking the body, so that recursive calls find it
+        program_.instances.push_back(inst);
+        program_.instance_copies.push_back(copy);
+        Checker(program_, diags_, this).check_instance(inst, *copy);
+        return inst;
+    }
+
+private:
+    /// A fresh copy of the template's declaration, re-parsed from its source text, so that the
+    /// instance has an AST of its own. It lives as long as the program: symbols refer to it.
+    /// Null when the source does not hold exactly one declaration.
+    Decl* copy_of(const Symbol& templ) {
+        const Decl& src           = templ.definition ? *templ.definition : *templ.decl;
+        const SourceFile& file    = sources_.file(src.span.file);
+        std::vector<Token> tokens = tokenize_range(file, src.span.file, diags_, src.span.begin, src.span.end);
+        program_.instance_files.push_back(parse(file, src.span.file, tokens, diags_));
+        ast::File& parsed = program_.instance_files.back();
+        if (parsed.decls.size() != 1) return nullptr;
+        return parsed.decls.front().get();
+    }
+
+    sema::Program&                                                        program_;
+    const SourceManager&                                                  sources_;
+    DiagnosticEngine&                                                     diags_;
+    std::map<std::pair<const Symbol*, std::vector<const Type*>>, const Type*> memo_;
+    std::map<std::pair<const Symbol*, std::vector<const Type*>>, Symbol*>     fn_memo_;
+    std::map<const Symbol*, unsigned>                                     count_;
+};
+
+// Null only when the template's source did not parse (already reported) or no instantiator is set.
+Symbol* Checker::instantiate_function(const Symbol* templ, const std::vector<const Type*>& args) {
+    return instantiator_ ? instantiator_->instantiate_function(templ, args) : nullptr;
+}
 
 } // namespace
 
-void check_types(sema::Program& program, DiagnosticEngine& diags) {
+void check_types(sema::Program& program, const SourceManager& sources, DiagnosticEngine& diags) {
     if (!program.types) program.types = std::make_shared<types::TypeContext>();
-    Checker(program, diags).run();
+    Instantiator instantiator(program, sources, diags);
+    program.types->set_instantiator(
+        [&](const Symbol* templ, const std::vector<const Type*>& args) { return instantiator.instantiate(templ, args); });
+    Checker(program, diags, &instantiator).run();
+    // Instances are only made while checking. Later phases see the ones that exist.
+    program.types->set_instantiator(nullptr);
 }
 
 } // namespace rift

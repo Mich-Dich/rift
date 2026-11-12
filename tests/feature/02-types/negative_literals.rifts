@@ -1,0 +1,7 @@
+// feature 02/16: a suffixed literal under '-' is checked with its sign.
+void f() {
+    i8  a = -128i8;
+    i64 b = -9223372036854775808i64;
+    i8  c = 128i8;                                //~ error[E4002]: 128i8 does not fit in 'i8'
+    i8  d = -129i8;                               //~ error[E4002]: -129i8 does not fit in 'i8'
+}

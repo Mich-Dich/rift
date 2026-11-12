@@ -20,7 +20,7 @@ enum parse_error : u8 {
     empty,
 }
 
-struct cursor {
+view struct cursor {
     std::str text;
     usize    pos = 0;
 

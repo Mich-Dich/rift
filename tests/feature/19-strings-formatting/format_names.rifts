@@ -1,0 +1,6 @@
+// feature 19: names in holes are resolved like any other expression.
+import std;
+
+void f(u32 n) {
+    std::println(f"{n} {missing}");               //~ error[E3020]: 'missing'
+}

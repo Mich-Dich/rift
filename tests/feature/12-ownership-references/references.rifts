@@ -1,0 +1,28 @@
+// feature 12: references are second-class: no reference fields, and a returned reference
+// borrows from 'this' or from the only reference parameter.
+import std;
+
+struct bad_ref { u32& r; }                          //~ error[E5010]: is a reference
+struct bad_view { std::str s; }                     //~ error[E5011]: view type 'std::str'
+struct bad_list { std::darray<std::str> parts; }    //~ error[E5011]
+view struct good_view { std::str s; u32& r; }
+struct ok_static { std::static_str name = "x"; }
+
+std::str trim(std::str s) { return s; }
+std::str pick(std::str a, std::str b) { return a; }          //~ error[E5012]: could borrow from 'a' or 'b'
+std::str nothing() { return "x"; }                           //~ error[E5012]: no reference parameter
+u32& first(u32& v) { return v; }
+u32& local(u32& unused) {
+    u32 x = 1;
+    return x;                                                //~ error[E5013]: local 'x'
+}
+std::str from_value(std::str v, std::string s) {
+    return s;                                                //~ error[E5013]: by-value parameter 's'
+}
+
+class buffer {
+public:
+    u8& at(usize i) { return this.data[i]; }
+private:
+    std::darray<u8> data = default;
+}

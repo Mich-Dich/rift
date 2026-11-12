@@ -143,10 +143,30 @@ struct PlaceholderType : TypeExpr {
 
 // --- expressions --------------------------------------------------------------------------
 
+/// `{expr:spec}` in an f-string (spec 19). Everything is optional except the expression.
+struct FormatSpec {
+    char align     = 0;    // 0, '<', '>' or '^'
+    bool plus      = false;
+    int  width     = -1;
+    int  precision = -1;
+    char radix     = 0;    // 0, 'x', 'X', 'b' or 'o'
+    Span span;             // the spec text after ':' (empty span when there is none)
+    bool present   = false;
+};
+
+/// One piece of an f-string: literal text, or a hole with an expression.
+struct FormatPart {
+    std::string text;   // literal text (escapes decoded); empty for holes
+    ExprPtr     expr;   // the hole's expression; null for literal text
+    FormatSpec  spec;
+    Span        span;
+};
+
 struct LiteralExpr : Expr {
     TokenKind   token_kind;   // which literal token produced it
     std::string text;         // source text
     std::string value;        // decoded string/char contents
+    std::vector<FormatPart> format_parts;   // f-strings only: text and holes in order
     u128        int_value = 0;
     std::string suffix;
     bool        bool_value = false;
@@ -269,6 +289,7 @@ struct Capture {
     Span        span;
     ExprPtr     init;   // CaptureKind::init only
     SymbolRef   symbol = nullptr;   // the local the capture introduces inside the lambda
+    SymbolRef   captured = nullptr; // the enclosing function's local it captures (not for init-captures)
 };
 
 struct Param {

@@ -1,0 +1,7 @@
+// RUN: riftc check --stop-after=types %s
+// Stopping after type checking skips the ownership rules: this file is clean up to there.
+import std;
+
+void f(std::string a) {
+    std::string b = a;
+}

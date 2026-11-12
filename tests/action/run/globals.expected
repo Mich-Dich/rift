@@ -1,0 +1,6 @@
+exit: 0
+--- stdout
+call 1 scaled 0.0
+call 2 scaled 2.5
+call 3 scaled 5.0
+--- stderr

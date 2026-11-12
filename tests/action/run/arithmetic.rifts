@@ -1,0 +1,26 @@
+// RUN: riftc run %s
+// Integer and float arithmetic (spec 16), wrapping operators, bit operations and casts (spec 17).
+import std;
+
+void main() {
+    i32 a = -7;
+    i32 b = 2;
+    std::println(f"div {a / b} rem {a % b} mul {a * b} sub {a - b}");   // division truncates toward zero
+    u8 small = 250;
+    std::println(f"wrapping: {small +% 10} {cast::truncate<u8>(3u32) -% 5} {small *% 2}");
+    u32 flags = bit(0) | bit(3) | bit(31);
+    std::println(f"flags {flags:x} and {flags & 8} xor {flags ^ 1} not {~flags} shl {1u32 << 4} shr {flags >> 28}");
+    i8 neg = -128;
+    std::println(f"i8 min {neg}, i8 shr {neg >> 2}, i64 min {-9223372036854775808i64}");
+    u128 huge = 340282366920938463463374607431768211455;
+    std::println(f"u128 max {huge}");
+    std::println(f"truncate {cast::truncate<u8>(300u32)} saturate {cast::saturate<u8>(300u32)} {cast::saturate<i8>(-300i32)}");
+    std::println(f"saturate floats {cast::saturate<i32>(3.9f64)} {cast::saturate<u8>(-1.5f64)} {cast::saturate<i32>(1e30f64)}");
+    std::println(f"widen {cast<u64>(small)} {cast<f64>(a)} {cast<i32>(true)}");
+    f64 x = 7.5;
+    std::println(f"floats {x / 2.0} {x % 2.0} {-x} {x * x - 0.25}");
+    f32 y = 0.1;
+    std::println(f"f32 {y} {y + 0.2f32}");
+    bool t = 3u32 < 4 && !(a > 0);
+    std::println(f"bool {t} {t == false}");
+}

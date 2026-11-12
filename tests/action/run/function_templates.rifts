@@ -1,0 +1,34 @@
+// RUN: riftc run %s
+// Function templates (spec 14): a call instantiates the template for its arguments, explicit or deduced.
+import std;
+
+template<type T>
+T larger(T a, T b) {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+template<type T>
+T twice(T v) {
+    return larger(v, v);
+}
+
+// Recursion: the instance calls itself, which finds the instance already made.
+template<type T>
+T sum_to(T n) {
+    if (n == 0) {
+        return 0;
+    }
+    return n + sum_to(n - 1);
+}
+
+void main() {
+    std::println(f"explicit {larger<u32>(3, 4)}");
+    std::println(f"deduced {larger(10u32, 2u32)}");
+    std::println(f"nested {twice(5i32)}");
+    std::println(f"signed {larger(-7i8, -3i8)}");
+    std::println(f"sum {sum_to(10u64)}");
+    std::println(f"sum again {sum_to(4u8)}");
+}

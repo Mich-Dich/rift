@@ -18,6 +18,8 @@
 // --- driver ---------------------------------------------------------------------------------
 RIFT_DIAG(E0001, error,   "cannot read source file")
 RIFT_DIAG(E0002, error,   "unsupported source file extension (expected .rifts or .rifth)")
+RIFT_DIAG(E0003, error,   "cannot run the C compiler")
+RIFT_DIAG(E0004, error,   "cannot write the output file")
 
 // --- lexer ----------------------------------------------------------------------------------
 RIFT_DIAG(E1001, error,   "invalid character in source")
@@ -66,6 +68,7 @@ RIFT_DIAG(E2026, error,   "lambda captures must be named")
 RIFT_DIAG(E2027, error,   "enum needs an underlying tag type")
 RIFT_DIAG(E2028, error,   "interface methods cannot have a body")
 RIFT_DIAG(E2029, error,   "'_' can only be used in patterns and in '_ = expr;'")
+RIFT_DIAG(E2030, error,   "malformed format string")
 
 // --- modules and names ----------------------------------------------------------------------
 RIFT_DIAG(E3001, error,   "cannot find module")
@@ -157,6 +160,24 @@ RIFT_DIAG(E4130, error,   "enum tag type must be an integer type")
 RIFT_DIAG(E4140, error,   "type has no default value")
 RIFT_DIAG(E4150, error,   "result must be used")
 RIFT_DIAG(E4160, error,   "cannot deduce template argument")
+RIFT_DIAG(E4170, error,   "format spec does not fit the value's type")
+RIFT_DIAG(E4180, error,   "wrong number of template arguments")
+
+// --- ownership and references ---------------------------------------------------------------
+RIFT_DIAG(E5001, error,   "value of a non-copy type would be copied implicitly")
+RIFT_DIAG(E5002, error,   "use of a moved value")
+RIFT_DIAG(E5010, error,   "references cannot be stored in fields")
+RIFT_DIAG(E5011, error,   "a field of view type needs a 'view' type")
+RIFT_DIAG(E5012, error,   "a returned reference needs exactly one source")
+RIFT_DIAG(E5013, error,   "returns a reference to a value that is destroyed")
+RIFT_DIAG(E5020, error,   "the same value is passed as 'mut' and as another argument")
+RIFT_DIAG(E5021, error,   "container changed while a loop borrows it")
+RIFT_DIAG(E5022, error,   "value changed while a reference to it is in use")
+RIFT_DIAG(E5030, error,   "type cannot be cloned")
+
+// E6xxx: code generation (M6)
+RIFT_DIAG(E6001, error,   "not supported by code generation yet")
+RIFT_DIAG(E6002, error,   "the program has no 'main' function")
 
 RIFT_DIAG(W1001, warning, "'/*' inside a block comment (block comments do not nest)")
 RIFT_DIAG(W4001, warning, "unreachable match arm")

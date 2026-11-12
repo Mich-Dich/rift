@@ -1,0 +1,9 @@
+exit: 0
+--- stdout
+particle 7 at (0.0, 0.0) moving (1.0, 2.0)
+moved to (2.0, 2.0), dot 6.0
+counter 11
+reset 0, largest 2.0
+copy 1.0 zero 0.0
+matched id 7
+--- stderr

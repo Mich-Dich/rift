@@ -1,0 +1,26 @@
+// feature 12: what counts as a copy type.
+import std;
+
+struct point { f64 x = 0.0; f64 y = 0.0; }          // copy: all fields are copy types
+struct named { std::string name; }                  // owning: has a std::string
+class handle {
+public:
+    ~handle() { }                                   // a destructor: never a copy type
+}
+enum shape : u8 { circle(f64), label(std::string) } // owning payload
+enum simple : u8 { a, b }                           // copy
+
+
+void copies(point p, named n, handle h, shape s, simple e, std::str v, std::raw_ptr<u8> raw) {
+    point p2 = p;
+    simple e2 = e;
+    std::str v2 = v;
+    std::raw_ptr<u8> raw2 = raw;
+    named n2 = n;                                   //~ error[E5001]: 'n' has type 'named'
+    handle h2 = h;                                  //~ error[E5001]: 'h' has type 'handle'
+    shape s2 = s;                                   //~ error[E5001]
+    named n3 = n.clone();
+    shape s3 = s.clone();
+    named& r = n;                                   // a reference: nothing is copied
+    named n4 = r;                                   //~ error[E5001]
+}

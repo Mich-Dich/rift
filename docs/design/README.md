@@ -1,6 +1,6 @@
-# Rift - Language Design (v0.3)
+# Rift - Language Design (v0.5)
 
-> **Status:** Draft v0.3. This folder replaces `docs/design_doc.md` (v0.2).
+> **Status:** Draft v0.5. This folder replaces `docs/design_doc.md` (v0.2).
 > **Lineage:** C++-inspired. Explicit, simple to use, high control.
 > **Files:** `.rifts` = source, `.rifth` = header.
 
@@ -32,6 +32,9 @@ Each file below describes **one concept** and can be read on its own. Every file
 | 20 | [20-standard-library.md](20-standard-library.md) | Naming rules and type catalogue |
 | 21 | [21-simd.md](21-simd.md) | SIMD sketch (deferred) |
 | 22 | [22-open-questions.md](22-open-questions.md) | Everything not decided yet |
+| 23 | [23-compile-checks.md](23-compile-checks.md) | Checks: `compile_time check`, `run_time check`, mode-gated checks, custom compiler messages |
+| 24 | [24-build-modes.md](24-build-modes.md) | `debug`, `release`, `release_with_debug_info` and user-defined modes |
+| 25 | [25-build-system.md](25-build-system.md) | `build.rifts`: Rift as the build system, including C/C++ |
 
 A complete program written to these rules is in [`examples/employees.rifts`](../../examples/employees.rifts).
 
@@ -39,13 +42,34 @@ A complete program written to these rules is in [`examples/employees.rifts`](../
 
 1. **Explicit beats implicit.** If a value's type, cost or behaviour can't be read from the source, the compiler refuses to guess. The *complete* list of implicit conversions fits in one table (see 02).
 2. **One way to do each thing.** One way to initialize (`=`), one way to build a value (`T{...}`), one way to define a method body.
-3. **Safe by default.** Safe code cannot trigger undefined behaviour. Overflow, out-of-bounds access and bad shifts panic. Unsafe operations live inside a visible `unsafe { }` block.
+3. **Safe by default.** Safe code cannot trigger undefined behaviour. Overflow, out-of-bounds access and bad shifts panic. Unsafe operations live inside a visible `unsafe { }` block. All built-in build modes are safe; a user mode can relax this only by saying so in `build.rifts` (see 24).
 4. **Immutable by default.** Variables, parameters and `this` are immutable unless marked `mut`.
 5. **No uninitialized values.** Every variable has a value from its declaration on.
 6. **Composition and inheritance, both explicit.** Inheritance requires `open` on the base class.
 7. **Nothing costs more than it looks.** Allocation, copies of owning types, moves and dynamic dispatch are always visible in the code.
 8. **Control when you ask for it.** Every safe default has a named escape hatch: `+%` wrapping arithmetic, `cast::truncate`, `std::raw_ptr`, `unsafe`.
 9. **Fast, legible compilation.** Each error fits on one screen.
+
+## Changes from v0.4
+
+| Change | Reason |
+|---|---|
+| New: build modes `debug`, `release`, `release_with_debug_info` (see 24) | The language knows build modes out of the box |
+| User-defined modes with a base mode; they may change safety rules, and undefined behaviour needs `.allow_undefined_behavior = true` | Full control, but never silent |
+| Mode-gated checks: `run_time(debug) check`, `compile_time(release) check` (see 23) | Expensive checks can be left out of a build completely |
+| New: `build.rifts`, evaluated at compile time, builds Rift and C/C++ (see 25) | Rift is its own build system; no CMake needed |
+| Build settings reach code as `std::build::setting<T>(...)` | Typed replacement for `-D` defines |
+
+## Changes from v0.3
+
+| Change | Reason |
+|---|---|
+| New: `compile_time check`, `run_time check`, `compile_time run_time check` (see 23) | One statement for build requirements and run-time asserts; the modifier says when it is evaluated |
+| Checks at the start of a function body are **entry checks**, evaluated at every call | Preconditions that report errors at the caller's line |
+| New: `std::compile_error` / `compile_warning` / `compile_note` for block-form checks | Library and template authors can report mistakes in the user's code, in their own words |
+| No `std::assert` | `run_time check` replaces it |
+| The relative-path warning (19) is now a library `check` on `std::file::open` | It passes the boundary test: a library can implement it |
+| Checks are written only in the `.rifts`; the compiled interface carries them to importers (09) | The source is the single source of truth |
 
 ## Changes from v0.2
 

@@ -1,0 +1,11 @@
+// feature 19: malformed f-strings.
+// STOP-AFTER: parse
+void f() {
+    std::println(f"{x");                          //~ error[E2030]: never closed
+    std::println(f"a } b");                       //~ error[E2030]: unmatched '}'
+    std::println(f"{}");                          //~ error[E2030]: empty '{}'
+    std::println(f"{x:zz}");                      //~ error[E2030]: invalid format spec 'zz'
+    std::println(f"{x:.}");                       //~ error[E2030]: needs a precision
+    std::println(f"{x + }");                      //~ error[E2002]: expected an expression, found '}'
+    std::println(f"{a::b} {a::b:>3} {{x}}");
+}

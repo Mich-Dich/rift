@@ -1,0 +1,40 @@
+// RUN: riftc run %s
+// Simple enums and enums with payloads (spec 08), matched exhaustively (spec 10).
+import std;
+
+enum color : u8 { red, green = 5, blue }
+
+enum shape : u8 {
+    circle(f64),
+    rect(size),
+    point,
+}
+
+struct size { f64 w = 0.0; f64 h = 0.0; }
+
+std::static_str name(color c) {
+    return match (c) {
+        color::red => "red",
+        color::green => "green",
+        color::blue => "blue",
+    };
+}
+
+f64 area(shape s) {
+    return match (s) {
+        shape::circle(r) => 3.0 * r * r,
+        shape::rect(size{ .w = w, .h = h }) => w * h,
+        shape::point => 0.0,
+    };
+}
+
+void main() {
+    color c = color::blue;
+    std::println(f"{name(c)} = {cast<u8>(c)}, green = {cast<u8>(color::green)}, same: {c == color::blue}");
+    shape r = shape::rect(size{ .w = 2.0, .h = 3.5 });
+    std::println(f"areas {area(shape::circle(2.0))} {area(r)} {area(shape::point)}");
+    match (r) {
+        shape::rect(sz) if sz.w > 1.0 => std::println(f"wide rect {sz.w}"),
+        _ => std::println("something else"),
+    }
+}

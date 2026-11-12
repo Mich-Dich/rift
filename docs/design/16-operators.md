@@ -27,7 +27,7 @@ Assignment (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`, `
 |---|---|---|
 | Overflow | **panic** | wraps around (two's complement) |
 
-- The default is **the same in debug and release builds**.
+- The default is **the same in all built-in build modes** (`debug`, `release`, `release_with_debug_info`). A user-defined mode may switch `+ - *` to wrapping, explicitly in `build.rifts` (see 24). `+%` and `checked_*` never change with the mode.
 - Division or `%` by zero panics. So does `i32::min / -1`.
 - More explicit variants: `std::checked_add(a, b)` returns `std::option`; `std::saturating_add(a, b)` clamps (and the same for sub/mul).
 - Integer division truncates toward zero. The sign of `%` follows the left operand.
@@ -80,6 +80,6 @@ mut T& operator[](usize i) mut { ... }
 
 ## Rationale
 - **Precedence fix:** C's precedence for `&` and `|` is a known mistake from 1972. Go, Rust and Swift have all fixed it.
-- **Overflow panics in release too:** "no undefined behaviour" must hold in the build that ships. Code that relies on wrapping says so with `+%`. The check is one predictable branch, and you can opt out of it explicitly.
+- **Overflow panics in release too:** "no undefined behaviour" must hold in the build that ships. A project that wants otherwise defines its own mode and says so (see 24). Code that relies on wrapping says so with `+%`. The check is one predictable branch, and you can opt out of it explicitly.
 - **`bit(n)` with no fallback type:** consistent with literals and `auto` (see 02, 03). The type is always written somewhere.
 - **Run-time `bit(n)`:** the same check-then-panic rule as indexing. Before, you had to switch to `1u32 << n`, which gave no extra safety.

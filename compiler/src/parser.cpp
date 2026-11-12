@@ -1,4 +1,5 @@
 #include "rift/parser.hpp"
+#include "rift/lexer.hpp"
 
 #include "rift/ast_printer.hpp"
 
@@ -1511,7 +1512,189 @@ private:
         lit->int_value  = t.int_value;
         lit->suffix     = std::string(t.suffix);
         lit->bool_value = t.is(TokenKind::kw_true);
+        if (t.is(TokenKind::format_string_literal)) split_format_string(*lit);
         return lit;
+    }
+
+    // --- f-strings (spec 19) --------------------------------------------------------------
+
+    /// Splits `f"a {x:>4} b"` into text and holes. Hole expressions are lexed and parsed from
+    /// the original source range, so their spans and diagnostics point into the f-string.
+    void split_format_string(LiteralExpr& lit) {
+        std::string_view src   = file_.text();
+        std::size_t      begin = lit.span.begin + 2;   // after `f"`
+        std::size_t      end   = lit.span.end - 1;     // before the closing `"`
+        std::string      text;
+        std::size_t      text_begin = begin;
+        auto flush_text = [&](std::size_t at) {
+            if (!text.empty()) {
+                FormatPart part;
+                part.text = std::move(text);
+                part.span = Span{id_, static_cast<std::uint32_t>(text_begin), static_cast<std::uint32_t>(at)};
+                lit.format_parts.push_back(std::move(part));
+                text.clear();
+            }
+        };
+        auto sp = [&](std::size_t a, std::size_t b) {
+            return Span{id_, static_cast<std::uint32_t>(a), static_cast<std::uint32_t>(b)};
+        };
+        std::size_t i = begin;
+        while (i < end) {
+            char c = src[i];
+            if (c == '\\') {
+                i = decode_escape(src, i, end, text);
+                continue;
+            }
+            if (c == '}') {
+                if (i + 1 < end && src[i + 1] == '}') {
+                    text += '}';
+                    i += 2;
+                    continue;
+                }
+                report(DiagCode::E2030, sp(i, i + 1), "unmatched '}' in format string", "write '}}' for a literal '}'");
+                ++i;
+                continue;
+            }
+            if (c != '{') {
+                text += c;
+                ++i;
+                continue;
+            }
+            if (i + 1 < end && src[i + 1] == '{') {
+                text += '{';
+                i += 2;
+                continue;
+            }
+            // A hole: find the matching '}' and a top-level ':' that is not part of '::'.
+            flush_text(i);
+            std::size_t open = i, colon = 0, depth = 0, j = i + 1;
+            for (; j < end; ++j) {
+                char d = src[j];
+                if (d == '(' || d == '[' || d == '{') ++depth;
+                else if ((d == ')' || d == ']' || d == '}') && depth > 0) --depth;
+                else if (d == '}') break;
+                else if (d == ':' && depth == 0 && colon == 0) {
+                    bool double_colon = (j + 1 < end && src[j + 1] == ':') || src[j - 1] == ':';
+                    if (!double_colon) colon = j;
+                }
+            }
+            if (j >= end) {
+                report(DiagCode::E2030, sp(open, end), "'{' in format string is never closed",
+                       "missing '}'").notes.push_back(Note{"write '{{' for a literal '{'", std::nullopt});
+                text_begin = end;
+                i = end;
+                break;
+            }
+            std::size_t expr_end = colon ? colon : j;
+            FormatPart  part;
+            part.span = sp(open, j + 1);
+            if (src.substr(open + 1, expr_end - open - 1).find_first_not_of(" \t") == std::string_view::npos) {
+                report(DiagCode::E2030, part.span, "empty '{}' in format string", "no expression")
+                    .notes.push_back(Note{"write '{{}}' for literal braces", std::nullopt});
+                part.expr = std::make_unique<SimpleExpr>(ExprKind::error, part.span);
+            } else {
+                part.expr = parse_hole(open + 1, expr_end);
+            }
+            if (colon) part.spec = parse_format_spec(src, colon + 1, j);
+            lit.format_parts.push_back(std::move(part));
+            i          = j + 1;
+            text_begin = i;
+        }
+        flush_text(end);
+    }
+
+    /// Decodes the escape at `src[i]` (a backslash) into `out`; returns the index after it.
+    /// The lexer already validated every escape in the literal.
+    static std::size_t decode_escape(std::string_view src, std::size_t i, std::size_t end, std::string& out) {
+        if (i + 1 >= end) return end;
+        char e = src[i + 1];
+        switch (e) {
+        case 'n': out += '\n'; return i + 2;
+        case 't': out += '\t'; return i + 2;
+        case 'r': out += '\r'; return i + 2;
+        case '0': out += '\0'; return i + 2;
+        case '\\': out += '\\'; return i + 2;
+        case '"': out += '"'; return i + 2;
+        case 'u': {
+            std::size_t close = src.find('}', i);
+            if (close == std::string_view::npos || close >= end) return end;
+            std::uint32_t cp = 0;
+            for (std::size_t k = i + 3; k < close; ++k) {
+                char h = src[k];
+                cp     = cp * 16 + static_cast<std::uint32_t>(h <= '9' ? h - '0' : (h | 0x20) - 'a' + 10);
+            }
+            append_utf8(out, cp);
+            return close + 1;
+        }
+        default: out += e; return i + 2;
+        }
+    }
+
+    static void append_utf8(std::string& out, std::uint32_t cp) {
+        if (cp < 0x80) {
+            out += static_cast<char>(cp);
+        } else if (cp < 0x800) {
+            out += static_cast<char>(0xC0 | (cp >> 6));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
+        } else if (cp < 0x10000) {
+            out += static_cast<char>(0xE0 | (cp >> 12));
+            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
+        } else {
+            out += static_cast<char>(0xF0 | (cp >> 18));
+            out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+    }
+
+    /// Parses the expression in a hole. Its diagnostics go through report(), so speculative
+    /// parsing of the enclosing code does not duplicate them.
+    ExprPtr parse_hole(std::size_t begin, std::size_t end) {
+        DiagnosticEngine   local;
+        std::vector<Token> tokens = tokenize_range(file_, id_, local, begin, end);
+        ExprPtr            e      = Parser(file_, id_, tokens, local).parse_single_expression();
+        for (const Diagnostic& d : local.all()) {
+            std::string message = d.message;   // the hole ends at its '}', not at the end of the file
+            if (std::size_t at = message.find("end of file"); at != std::string::npos) message.replace(at, 11, "'}'");
+            Diagnostic& r = report(d.code, d.span, message, d.label);
+            r.notes       = d.notes;
+        }
+        return e;
+    }
+
+    /// `[<>^][+][width][.precision][x|X|b|o]`
+    FormatSpec parse_format_spec(std::string_view src, std::size_t begin, std::size_t end) {
+        FormatSpec  spec;
+        spec.present = true;
+        spec.span    = Span{id_, static_cast<std::uint32_t>(begin), static_cast<std::uint32_t>(end)};
+        std::size_t i = begin;
+        auto number = [&]() {
+            int n = 0;
+            while (i < end && src[i] >= '0' && src[i] <= '9' && n < 10000) n = n * 10 + (src[i++] - '0');
+            return n;
+        };
+        if (i < end && (src[i] == '<' || src[i] == '>' || src[i] == '^')) spec.align = src[i++];
+        if (i < end && src[i] == '+') {
+            spec.plus = true;
+            ++i;
+        }
+        if (i < end && src[i] >= '0' && src[i] <= '9') spec.width = number();
+        if (i < end && src[i] == '.') {
+            ++i;
+            if (i >= end || src[i] < '0' || src[i] > '9') {
+                report(DiagCode::E2030, spec.span, "'.' in a format spec needs a precision", "e.g. '.2'");
+                return spec;
+            }
+            spec.precision = number();
+        }
+        if (i < end && (src[i] == 'x' || src[i] == 'X' || src[i] == 'b' || src[i] == 'o')) spec.radix = src[i++];
+        if (i != end) {
+            report(DiagCode::E2030, spec.span, std::format("invalid format spec '{}'", src.substr(begin, end - begin)),
+                   "not a format spec")
+                .notes.push_back(Note{"a spec is [<>^][+][width][.precision][x|X|b|o], e.g. '>8.2'", std::nullopt});
+        }
+        return spec;
     }
 
     ExprPtr parse_primary() {

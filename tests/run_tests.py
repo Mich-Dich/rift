@@ -15,7 +15,9 @@ Three suites:
 
            A file without error annotations must compile (exit 0).
   action   End-to-end runs of riftc: tests/action/**/*.rifts whose first lines hold
-           `// RUN: riftc <args>` (%s = this file, relative to the repo root).
+           `// RUN: riftc <args>` (%s = this file, relative to the repo root; %t = a fresh
+           temporary directory, spelled `%t` again in the recorded output).
+           `riftc run` tests record the compiled program's own output and exit status.
            stdout, stderr and the exit code are compared with the golden file
            <name>.expected next to the test. `--update` (re)writes the golden files.
 
@@ -37,6 +39,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -52,7 +55,7 @@ ANNOTATION = re.compile(
 )
 RUN_LINE = re.compile(r"^\s*//\s*RUN:\s*(?P<cmd>.+?)\s*$")
 XFAIL_LINE = re.compile(r"^\s*//\s*XFAIL:\s*(?P<reason>.*)$", re.MULTILINE)
-STOP_AFTER_LINE = re.compile(r"^\s*//\s*STOP-AFTER:\s*(?P<phase>lex|parse|resolve|types)\b", re.MULTILINE)
+STOP_AFTER_LINE = re.compile(r"^\s*//\s*STOP-AFTER:\s*(?P<phase>lex|parse|resolve|types|ownership)\b", re.MULTILINE)
 
 
 # --- output helpers -----------------------------------------------------------------------
@@ -261,11 +264,13 @@ def run_action(path: Path, riftc: Path, update: bool) -> Result:
     if len(run_lines) != 1:
         return Result("action", name, "FAIL", ["need exactly one '// RUN: riftc ...' line in the first 20 lines"])
 
-    argv = shlex.split(run_lines[0].replace("%s", name).replace("%S", rel(path.parent)))
-    if not argv or argv[0] != "riftc":
-        return Result("action", name, "FAIL", ["RUN line must start with 'riftc'"])
-    proc = run([str(riftc)] + argv[1:])
-    actual = format_golden(proc.returncode, proc.stdout, proc.stderr)
+    with tempfile.TemporaryDirectory(prefix="rift-action-") as tmp:
+        argv = shlex.split(run_lines[0].replace("%s", name).replace("%S", rel(path.parent)).replace("%t", tmp))
+        if not argv or argv[0] != "riftc":
+            return Result("action", name, "FAIL", ["RUN line must start with 'riftc'"])
+        args = argv[1:]
+        proc = run([str(riftc)] + args)
+        actual = format_golden(proc.returncode, proc.stdout.replace(tmp, "%t"), proc.stderr.replace(tmp, "%t"))
 
     golden = golden_path(path)
     if update:

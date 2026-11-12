@@ -1,0 +1,14 @@
+exit: 0
+--- stdout
+div -3 rem -1 mul -14 sub -9
+wrapping: 4 254 244
+flags 80000009 and 8 xor 2147483656 not 2147483638 shl 16 shr 8
+i8 min -128, i8 shr -32, i64 min -9223372036854775808
+u128 max 340282366920938463463374607431768211455
+truncate 44 saturate 255 -128
+saturate floats 3 0 2147483647
+widen 250 -7.0 1
+floats 3.75 1.5 -7.5 56.0
+f32 0.1 0.3
+bool true false
+--- stderr

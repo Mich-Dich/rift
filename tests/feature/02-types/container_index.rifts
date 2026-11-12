@@ -1,0 +1,9 @@
+// feature 02: std sequences are indexed with 'usize', maps with their key type.
+import std;
+
+void f(std::darray<u16> v, std::hash_map<std::string, u32> m, std::str key, u32 i) {
+    u16 a = v[0];
+    u16 b = v[cast<usize>(i)];
+    u16 c = v[i];                           //~ error[E4010]: expected 'usize' (the index), found 'u32'
+    u32 d = v[1];                           //~ error[E4010]: expected 'u32', found 'u16'
+}

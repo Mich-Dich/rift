@@ -1,0 +1,29 @@
+// feature 12: a container cannot change while a loop or a local reference borrows it.
+import std;
+
+struct employee { std::string name; u32 age = 0; }
+
+void use(employee& e) { }
+
+void loops(mut std::darray<employee> employees) {
+    for (employee& e : employees) {
+        employees.push(e.clone());          //~ error[E5021]: cannot call 'push' on 'employees' while the loop borrows it
+    }
+    for (mut employee& e : employees) {
+        e.age += 1;                         // changing it through the loop variable is fine
+        use(employees[0]);                  //~ error[E5021]: used while the loop borrows it mutably
+    }
+    for (employee& e : employees) {
+        use(e);
+    }
+    employees.clear();                      // the loop is over
+}
+
+void locals(mut std::darray<employee> employees, employee fresh) {
+    employee& first = employees[0];
+    employees.push(move fresh);             //~ error[E5022]: while 'first' refers to it
+    use(first);
+    employee& second = employees[0];
+    use(second);
+    employees.clear();                      // 'second' is not used any more
+}

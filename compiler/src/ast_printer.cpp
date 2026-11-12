@@ -163,7 +163,24 @@ S build_untyped(const Expr& e) {
     case ExprKind::bool_literal:
     case ExprKind::nullptr_literal: {
         const auto& lit = e.as<LiteralExpr>();
-        return S{literal_head(lit), {}};
+        S s{literal_head(lit), {}};
+        for (const FormatPart& part : lit.format_parts) {
+            if (!part.expr) continue;
+            S hole{"hole", {build(*part.expr)}};
+            if (part.spec.present) {
+                std::string spec;
+                if (part.spec.align) spec += part.spec.align;
+                if (part.spec.plus) spec += '+';
+                if (part.spec.width >= 0) spec += std::to_string(part.spec.width);
+                if (part.spec.precision >= 0) spec += "." + std::to_string(part.spec.precision);
+                if (part.spec.radix) spec += part.spec.radix;
+                hole.head += " :" + spec;
+            }
+            hole.atom = false;
+            s.kids.push_back(std::move(hole));
+            s.atom = false;
+        }
+        return s;
     }
     case ExprKind::this_: return S{"this", {}};
     case ExprKind::default_: return S{"default", {}};

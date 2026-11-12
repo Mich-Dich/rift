@@ -1,9 +1,10 @@
 #pragma once
 // Test helper: a throw-away project directory that is loaded, resolved and (optionally) type
-// checked like `riftc check` does.
+// checked and ownership checked like `riftc check` does.
 
 #include "rift/check.hpp"
 #include "rift/modules.hpp"
+#include "rift/ownership.hpp"
 #include "rift/resolve.hpp"
 
 #include <filesystem>
@@ -14,7 +15,7 @@
 
 namespace rift_test {
 
-enum class Stop { resolve, types };
+enum class Stop { resolve, types, ownership };
 
 struct Project {
     std::filesystem::path  root;
@@ -22,7 +23,7 @@ struct Project {
     rift::DiagnosticEngine diags;
     rift::sema::Program    program;
 
-    explicit Project(const std::map<std::string, std::string>& files, Stop stop = Stop::types,
+    explicit Project(const std::map<std::string, std::string>& files, Stop stop = Stop::ownership,
                      std::string entry = "main.rifts") {
         static int counter = 0;
         root = std::filesystem::temp_directory_path() / ("rift_unit_project_" + std::to_string(++counter));
@@ -34,7 +35,8 @@ struct Project {
         }
         program = rift::load_program((root / entry).string(), rift::LoadOptions{root.string()}, sources, diags);
         if (!diags.has_errors()) rift::resolve_program(program, diags);
-        if (!diags.has_errors() && stop == Stop::types) rift::check_types(program, diags);
+        if (!diags.has_errors() && stop != Stop::resolve) rift::check_types(program, sources, diags);
+        if (!diags.has_errors() && stop == Stop::ownership) rift::check_ownership(program, diags);
     }
     ~Project() { std::filesystem::remove_all(root); }
     Project(const Project&)            = delete;

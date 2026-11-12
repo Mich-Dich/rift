@@ -29,7 +29,7 @@ Names stay fully qualified no matter which form you use: `std::filesystem::path`
 | `static` variable | Complete, with its initializer | - |
 | Module-local items | - | Marked `private` |
 
-**Headers never contain function bodies.** **Method bodies are only ever defined inside the `class`/`struct` block in the `.rifts`.** There are no out-of-line `void test::f() { }` definitions.
+**Headers never contain function bodies.** Headers never contain `check`s either: checks are written only in the `.rifts` (see 23). **Method bodies are only ever defined inside the `class`/`struct` block in the `.rifts`.** There are no out-of-line `void test::f() { }` definitions.
 
 ### Class merge rules
 | Situation | Result |
@@ -57,7 +57,8 @@ The compiler turns each module into a compiled interface. Importers read **only*
 - every name from the `.rifth`,
 - the **complete layout** of each class (size, alignment, offsets), with private member *names* hidden,
 - whether each type is a copy type and whether it has a destructor,
-- template bodies and `compile_time` function bodies, in compiled form, so importers can instantiate and evaluate them (see 14, 15).
+- template bodies and `compile_time` function bodies, in compiled form, so importers can instantiate and evaluate them (see 14, 15),
+- every function's entry checks and every type-body check, so they run at the importer's calls and instantiations (see 23).
 
 ```rift
 // other.rifts

@@ -82,7 +82,7 @@ u32 c = `5`;         //~ error[E1001]
 Use feature tests to **pin down the spec**: one good file showing what is allowed and one
 bad file showing what is rejected.
 
-**Stopping early.** `// STOP-AFTER: parse` (or `lex`, `resolve`, `types`) runs only the phases up to
+**Stopping early.** `// STOP-AFTER: parse` (or `lex`, `resolve`, `types`, `ownership`) runs only the phases up to
 that one. Syntax tests use it, because their snippets refer to names that are never declared.
 
 **Multi-file tests.** A directory whose name ends in `_project` is one test: `main.rifts` is
@@ -111,8 +111,27 @@ u32 main() { return 0; }
 ```
 
 `%s` is the test file and `%S` its directory, relative to the repository root (the runner's
-working directory), so paths in the output are stable. The RUN line may point at any file,
-e.g. `// RUN: riftc check examples/employees.rifts`.
+working directory), so paths in the output are stable. `%t` is a fresh temporary directory
+for outputs (`// RUN: riftc build %s -o %t/prog`); it is written as `%t` in the golden file.
+The RUN line may point at any file, e.g. `// RUN: riftc check examples/employees.rifts`.
+
+**Running compiled programs.** `riftc run` builds the program in a temporary directory and
+exits with the *program's* status, so a `// RUN: riftc run %s` test records what the
+program printed and how it ended. `tests/action/run/` holds these: one program per language
+area (arithmetic, control flow, structs, enums, formatting, globals, modules, evaluation
+order) plus one test per kind of panic. A panic prints `file:line:col: panic: message` on
+stderr and aborts, which the runner records as `exit: 134` (128 + SIGABRT):
+
+```
+exit: 134
+--- stdout
+before
+--- stderr
+tests/action/run/panic_overflow.rifts:8:12: panic: integer overflow in '+' (u8)
+```
+
+`tests/action/build/` covers the `build` command itself: modes, output paths, E6001 for
+constructs the backend does not support yet, and E6002 for a missing `main`.
 
 Golden file format (`tests/action/check/errors_short.expected`):
 
@@ -128,7 +147,8 @@ On a mismatch the runner prints a unified diff. If the change is intended, run
 
 Use action tests for **what a user sees**: CLI behavior, exit codes, the exact diagnostic
 layout, token dumps (`riftc lex`), syntax trees (`riftc parse`), merged module symbol tables
-(`riftc symbols`), typed syntax trees (`riftc typed`), and the example programs.
+(`riftc symbols`), typed syntax trees (`riftc typed`), program output (`riftc run`), and the
+example programs.
 `tests/feature/99-programs/` holds complete programs that must check without any diagnostic;
 they guard against false errors.
 A `riftc parse` golden file is the easiest way to check *how* something parsed, e.g.

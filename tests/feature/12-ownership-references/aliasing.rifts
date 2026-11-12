@@ -1,0 +1,21 @@
+// feature 12: while a 'mut T&' exists it is the only way to reach the value.
+void swap(mut u32& a, mut u32& b) { }
+void read2(mut u32& a, u32& b) { }
+
+struct list {
+    u32 n = 0;
+    void absorb(mut list& other) mut { }
+}
+
+void calls() {
+    mut u32 a = 1;
+    mut u32 b = 2;
+    swap(mut a, mut b);
+    swap(mut a, mut a);                     //~ error[E5020]: 'a' is passed as a mutable reference and also as another argument
+    read2(mut a, a);                        //~ error[E5020]
+    read2(mut a, b);
+    mut list l = list{};
+    mut list m = list{};
+    l.absorb(mut m);
+    l.absorb(mut l);                        //~ error[E5020]: 'l'
+}

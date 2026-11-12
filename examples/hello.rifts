@@ -1,0 +1,54 @@
+// What the compiler can build today (M6): structs with methods, enums with payloads, match,
+// loops, checked arithmetic and f-strings. Run it with `riftc run examples/hello.rifts`.
+import std;
+
+struct vec2 {
+    f64 x = 0.0;
+    f64 y = 0.0;
+
+    f64 length_squared() {
+        return this.x * this.x + this.y * this.y;
+    }
+
+    void scale(f64 k) mut {
+        this.x *= k;
+        this.y *= k;
+    }
+}
+
+enum shape : u8 {
+    circle(f64),
+    rect(vec2),
+    point,
+}
+
+f64 area(shape s) {
+    return match (s) {
+        shape::circle(r) => 3.14159 * r * r,
+        shape::rect(vec2{ .x = w, .y = h }) => w * h,
+        shape::point => 0.0,
+    };
+}
+
+u64 fib(u32 n) {
+    mut u64 a = 0;
+    mut u64 b = 1;
+    for (u32 i : 0..n) {
+        u64 next = a + b;          // panics instead of wrapping if it ever overflows
+        a = b;
+        b = next;
+    }
+    return a;
+}
+
+void main() {
+    std::println("hello from rift!");
+    mut vec2 v = vec2{ .x = 3.0, .y = 4.0 };
+    std::println(f"|v|^2 = {v.length_squared()}");
+    v.scale(0.5);
+    std::println(f"scaled: ({v.x}, {v.y})");
+    std::println(f"areas: {area(shape::circle(1.0)):.3} {area(shape::rect(v))} {area(shape::point)}");
+    for (u32 n : 88..=92) {          // 93 would panic: the loop also computes fib(94), which overflows u64
+        std::println(f"fib({n:>2}) = {fib(n):>20}");
+    }
+}

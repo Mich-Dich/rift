@@ -1,0 +1,21 @@
+// RUN: riftc run %s
+// Operands and arguments are evaluated left to right.
+import std;
+
+u32 trace(u32 v) {
+    std::print(f"{v} ");
+    return v;
+}
+
+u32 three(u32 a, u32 b, u32 c) { return a * 100 + b * 10 + c; }
+
+struct triple { u32 a = 0; u32 b = 0; u32 c = 0; }
+
+void main() {
+    u32 r = three(trace(1), trace(2), trace(3));
+    std::println(f"-> {r}");
+    u32 s = trace(4) * 10 + trace(5);
+    std::println(f"-> {s}");
+    triple t = triple{ .c = trace(6), .a = trace(7) };
+    std::println(f"-> {t.a} {t.b} {t.c}");
+}

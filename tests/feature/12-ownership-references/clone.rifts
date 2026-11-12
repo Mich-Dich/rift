@@ -1,0 +1,16 @@
+// feature 05/12: structs and enums get clone() when every field can be cloned.
+import std;
+
+struct ok { std::string name; std::darray<u32> values; }
+struct with_file { std::file f; }
+class no_clone {
+public:
+    std::string label = std::string::from("x");
+}
+struct holds_class { no_clone c = no_clone{}; }
+
+void clones(ok a, with_file b, holds_class c) {
+    ok a2 = a.clone();
+    with_file b2 = b.clone();                       //~ error[E5030]: 'with_file' cannot be cloned
+    holds_class c2 = c.clone();                     //~ error[E5030]: 'holds_class' cannot be cloned
+}

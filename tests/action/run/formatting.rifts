@@ -1,0 +1,17 @@
+// RUN: riftc run %s
+// f-strings (spec 19): holes, specs, braces, every printable built-in type.
+import std;
+
+void main() {
+    u32  n = 255;
+    i16  m = -12;
+    f64  pi = 3.14159265358979;
+    char c = 'λ';
+    std::static_str s = "rift";
+    std::println(f"[{n}] [{n:x}] [{n:X}] [{n:b}] [{n:o}] [{n:>6}] [{n:<6}] [{n:^7}] [{n:+}]");
+    std::println(f"[{m}] [{m:x}] [{m:>5}] [{m:+}]");
+    std::println(f"[{pi}] [{pi:.2}] [{pi:>10.3}] [{pi:+.1}] [{1.0f64}] [{1e300f64 * 1e10}] [{0.0f64 / 0.0}]");
+    std::println(f"[{c}] [{c:>3}] [{c:x}] [{true}] [{false:>6}]");
+    std::println(f"[{s}] [{s:>6}] [{s:^8}] [{s.len()}] {{literal}} }}");
+    std::println(f"nested {n + 1} and call {s.is_empty()}");
+}

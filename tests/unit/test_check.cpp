@@ -194,3 +194,15 @@ TEST_CASE("check: unsafe") {
     CHECK_EQ(codes("import std;\nvoid f(std::raw_ptr<u32> p) { unsafe { u32 v = *p; } }"), std::string());
     CHECK_EQ(codes("unsafe void g() { }\nvoid f() { g(); }"), std::string("E4101"));
 }
+
+// --- std containers -----------------------------------------------------------------------
+
+TEST_CASE("check: indexing the std containers") {
+    CHECK_EQ(type_of_local("import std;\nvoid f(std::darray<u16> v) { u16 x = v[0]; }", "x"), std::string("u16"));
+    CHECK_EQ(type_of_local("import std;\nvoid f(std::hash_map<u32, bool> m) { bool x = m[3]; }", "x"), std::string("bool"));
+    CHECK_EQ(Project({{"main.rifts", "import std;\nvoid f(std::darray<u16> v, u32 i) { u16 x = v[i]; }"}}).codes(),
+             std::string("E4010"));
+    CHECK_EQ(Project({{"main.rifts", "import std;\nvoid f(std::darray<u16> v) { u32 x = v[0]; }"}}).codes(),
+             std::string("E4010"));
+    CHECK_EQ(Project({{"main.rifts", "import std;\nvoid f(std::thing v) { u32 x = v[0]; }"}}).codes(), std::string());
+}

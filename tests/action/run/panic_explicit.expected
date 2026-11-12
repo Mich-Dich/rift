@@ -1,0 +1,5 @@
+exit: 134
+--- stdout
+before
+--- stderr
+tests/action/run/panic_explicit.rifts:8:5: panic: giving up with code 3

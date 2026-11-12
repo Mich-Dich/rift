@@ -15,9 +15,11 @@
 #include "rift/token.hpp"
 
 #include <deque>
+#include <functional>
 #include <map>
 #include <string>
 #include <tuple>
+#include <vector>
 
 namespace rift::types {
 
@@ -56,9 +58,15 @@ struct Type {
     [[nodiscard]] std::string_view external_base() const;
 };
 
+/// Makes the instance of a template type for concrete arguments (spec 14). Set by the checker.
+using TypeInstantiator = std::function<const Type*(const sema::Symbol* templ, const std::vector<const Type*>& args)>;
+
 class TypeContext {
 public:
     TypeContext();
+
+    /// Without an instantiator, template types lower to `error` (nothing is instantiated).
+    void set_instantiator(TypeInstantiator instantiator) { instantiator_ = std::move(instantiator); }
 
     const Type* error() const { return error_; }
     const Type* untyped_int() const { return untyped_int_; }
@@ -79,16 +87,28 @@ public:
     const Type* user(const sema::Symbol* symbol);
     const Type* type_param(const sema::Symbol* symbol);
     const Type* external(const std::string& spelling);
+    /// The instance of the template type `templ` for `args` (spec 14). Error when the arguments
+    /// do not fit, are unknown, or no instantiator is set.
+    const Type* instance(const sema::Symbol* templ, const std::vector<const Type*>& args);
+
+    /// The type a written TypeExpr denotes (after name resolution). Template parameters found in
+    /// `subst` are replaced; template user types are not instantiated yet (error).
+    const Type* lower(const ast::TypeExpr& t, const std::map<const sema::Symbol*, const Type*>* subst = nullptr);
+    /// Template arguments of an external type as written, e.g. `std::result<u32, e>` -> {u32, e}.
+    const std::vector<const Type*>* external_args(const Type* t) const;
 
 private:
     const Type* make(Type t);
 
+    TypeInstantiator                                            instantiator_;
+    std::map<std::pair<const sema::Symbol*, std::vector<const Type*>>, const Type*> instances_;
     std::deque<Type>                                            storage_;
     std::map<std::string, const Type*>                          builtins_;
     std::map<std::tuple<int, const Type*, bool>, const Type*>   composites_;   // (kind, inner, mut)
     std::map<const sema::Symbol*, const Type*>                  users_;
     std::map<const sema::Symbol*, const Type*>                  params_;
     std::map<std::string, const Type*>                          externals_;
+    std::map<const Type*, std::vector<const Type*>>             external_args_;
     const Type* error_;
     const Type* untyped_int_;
     const Type* untyped_float_;
@@ -109,6 +129,10 @@ const Type* strip_ref(const Type* type);
 
 /// Whether an integer literal with this magnitude (negated if `negative`) fits in `type`.
 bool literal_fits(u128 magnitude, bool negative, const Type* type);
+
+/// Methods of standard-library containers known to change their receiver (`push`, `clear`, ...).
+/// Until the library is written in Rift, this table stands in for their trailing `mut`.
+bool is_mutating_library_method(const Type* receiver, std::string_view method);
 
 /// Smallest and largest value of an integer type, as text (for messages).
 std::string integer_range(const Type* type);

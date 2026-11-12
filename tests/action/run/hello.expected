@@ -1,0 +1,6 @@
+exit: 0
+--- stdout
+hello, rift!
+no newline, then one
+--- stderr
+this goes to stderr

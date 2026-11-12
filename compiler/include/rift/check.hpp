@@ -9,10 +9,12 @@
 // checked with their parameters treated as unknown types.
 
 #include "rift/diagnostics.hpp"
+#include "rift/source.hpp"
 #include "rift/symbols.hpp"
 
 namespace rift {
 
-void check_types(sema::Program& program, DiagnosticEngine& diags);
+/// Also makes the instances of template types that the program uses (spec 14).
+void check_types(sema::Program& program, const SourceManager& sources, DiagnosticEngine& diags);
 
 } // namespace rift

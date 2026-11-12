@@ -7,24 +7,30 @@ on:
 
 jobs:
   linux:
-    name: Linux / Clang
+    name: Linux / ${{ matrix.compiler }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang++, g++-14]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build python3 clang
+          sudo apt-get install -y ninja-build python3 clang g++-14 llvm-18-dev libzstd-dev
 
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
           -DCMAKE_BUILD_TYPE=Debug
+          -DRIFT_WERROR=ON
+          -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm
 
       - name: Build
         run: cmake --build build
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: python3 tests/run_tests.py --build-dir build --color always

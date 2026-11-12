@@ -46,7 +46,9 @@ exit: 0
             (arm (alt std::ok (bind e)) (call (.push (path employees)) (move (path e))))
             (arm
               (alt std::error _)
-              (call (path std::eprintln) (format-string "skipping bad line: {line}")))))))
+              (call
+                (path std::eprintln)
+                (format-string "skipping bad line: {line}" (hole (path line)))))))))
     (return (call (path std::ok) (move (path employees))))))
 (fn main -> std::exit_code
   (block
@@ -59,7 +61,7 @@ exit: 0
         (arm
           (alt std::error (bind e))
           (block
-            (call (path std::eprintln) (format-string "error: {e}"))
+            (call (path std::eprintln) (format-string "error: {e}" (hole (path e))))
             (return (path std::exit_code::failure))))))
     (call
       (.retain (path employees))
@@ -70,6 +72,12 @@ exit: 0
       (lambda (captures) (param e : employee&) (block (return (.salary (path e))))))
     (for e : employee&
       (in (path employees))
-      (block (call (path std::println) (format-string "{e.name:<20} {e.age:>3} {e.salary:>10.2}"))))
+      (block
+        (call
+          (path std::println)
+          (format-string "{e.name:<20} {e.age:>3} {e.salary:>10.2}"
+            (hole :<20 (.name (path e)))
+            (hole :>3 (.age (path e)))
+            (hole :>10.2 (.salary (path e)))))))
     (return (path std::exit_code::success))))
 --- stderr

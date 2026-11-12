@@ -1,0 +1,67 @@
+// feature 12: owning values are never copied implicitly; a moved variable cannot be used.
+import std;
+
+struct holder {
+    std::string text;
+}
+
+void consume(std::string s) { }
+void borrow(std::string& s) { }
+void look(std::str s) { }
+
+void moves(bool c) {
+    std::string a = std::string::from("a");
+    std::string b = a;                      //~ error[E5001]: 'a' has type 'std::string', which is not a copy type
+    std::string d = move a;
+    borrow(a);                              //~ error[E5002]: 'a' is used after it was moved
+    mut std::string e = std::string::from("e");
+    consume(move e);
+    e = std::string::from("again");         // a new value: usable again
+    look(e);
+    std::string f = std::string::from("f");
+    if (c) {
+        consume(move f);
+    }
+    look(f);                                //~ error[E5002]: 'f' is used after it was moved
+    std::string g = std::string::from("g");
+    if (c) {
+        consume(move g);
+        return;
+    }
+    look(g);                                // only moved on a path that returned
+    holder h = holder{ .text = std::string::from("x") };
+    std::string t = h.text;                 //~ error[E5001]: not a copy type
+    std::string u = h.text.clone();
+    u32 n = 1;
+    u32 m = n;                              // copy types are copied
+}
+
+void loops(bool c) {
+    std::string h = std::string::from("h");
+    while (c) {
+        consume(move h);                    //~ error[E5002]: 'h' is used after it was moved
+    }
+    std::string i = std::string::from("i");
+    for (u32 k : 0..3) {
+        consume(move i);                    // fine: the loop never reaches a second iteration
+        break;
+    }
+    mut std::string j = std::string::from("j");
+    while (c) {
+        consume(move j);
+        j = std::string::from("refilled");  // reassigned before the next iteration
+    }
+}
+
+void same_call(std::string a) {
+    two(move a, a);                         //~ error[E5002]
+}
+void two(std::string x, std::string y) { }
+
+std::string give(std::string s) {
+    return s;                               // returning a local moves it
+}
+
+std::string give_field(holder& h) {
+    return h.text;                          //~ error[E5001]: not a copy type
+}

@@ -16,6 +16,8 @@ namespace rift {
 class Lexer {
 public:
     Lexer(const SourceFile& file, FileId id, DiagnosticEngine& diags);
+    /// Lexes only the bytes [begin, end) of the file; spans stay absolute (f-string holes).
+    Lexer(const SourceFile& file, FileId id, DiagnosticEngine& diags, std::size_t begin, std::size_t end);
 
     /// Next token. After the end of input it keeps returning `eof`.
     Token next();
@@ -53,5 +55,7 @@ private:
 
 /// Convenience: lex a whole file.
 std::vector<Token> tokenize(const SourceFile& file, FileId id, DiagnosticEngine& diags);
+std::vector<Token> tokenize_range(const SourceFile& file, FileId id, DiagnosticEngine& diags, std::size_t begin,
+                                  std::size_t end);
 
 } // namespace rift

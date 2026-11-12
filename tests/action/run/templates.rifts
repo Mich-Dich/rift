@@ -1,0 +1,73 @@
+// RUN: riftc run %s
+// Templates (spec 14): struct, class and enum templates, instantiated per argument list.
+import std;
+
+template<type T>
+struct box {
+    T value;
+
+    T get() {
+        return this.value;
+    }
+
+    void set(T v) mut {
+        this.value = v;
+    }
+}
+
+template<type A, type B>
+struct pair {
+    A first;
+    B second;
+
+    B swap_into_second(A replacement) {
+        return this.second;
+    }
+}
+
+template<type T>
+enum maybe : u8 {
+    some(T),
+    none,
+}
+
+template<type T>
+class holder {
+public:
+    T get() {
+        return this.value;
+    }
+    ~holder() {
+        std::println(f"holder dropped with {this.value}");
+    }
+private:
+    T value = 0;
+}
+
+u32 unwrap_or_zero(maybe<u32> m) {
+    return match (m) {
+        maybe::some(v) => v,
+        maybe::none => 0,
+    };
+}
+
+void main() {
+    mut box<u32> b = box<u32>{ .value = 7 };
+    std::println(f"box {b.get()}");
+    b.set(9);
+    std::println(f"box {b.get()}");
+
+    box<bool> flag = box<bool>{ .value = true };
+    std::println(f"flag {flag.get()}");
+
+    box<box<u32>> nested = box<box<u32>>{ .value = box<u32>{ .value = 3 } };
+    std::println(f"nested {nested.get().get()}");
+
+    pair<u32, bool> p = pair<u32, bool>{ .first = 1, .second = false };
+    std::println(f"pair {p.first} {p.second}");
+
+    std::println(f"maybe {unwrap_or_zero(maybe<u32>::some(42))} {unwrap_or_zero(maybe<u32>::none)}");
+
+    holder<u32> h = holder<u32>{ .value = 5 };
+    std::println(f"holder {h.get()}");
+}

@@ -156,6 +156,55 @@ public:
         for (auto& [name, m] : program_.modules) resolve_bodies(*m);
     }
 
+    /// An instance of a template type (spec 14): a symbol for a copy `d` of the template's
+    /// declaration, with its members collected and resolved in the template's module. The copy
+    /// is not registered in the module's items. `params` receives its template parameters.
+    Symbol* build_instance(Module& m, bool from_header, Decl& d, std::vector<Symbol*>& params) {
+        FileScope fs(*this, &m, from_header);
+        SymbolKind kind = d.kind == DeclKind::struct_ ? SymbolKind::struct_
+                        : d.kind == DeclKind::class_  ? SymbolKind::class_
+                        : d.kind == DeclKind::enum_   ? SymbolKind::enum_
+                                                      : SymbolKind::interface;
+        Symbol* sym    = m.make(kind, d.name, d.name_span);
+        sym->decl      = &d;
+        sym->in_header = false;
+        symbol_of_[&d] = sym;
+        TemplateScope ts(*this, d);
+        params = template_params_.back();
+        if (d.kind == DeclKind::enum_) {
+            auto& e = d.as<EnumDecl>();
+            for (EnumAlternative& alt : e.alternatives) {
+                Symbol* a      = m.make(SymbolKind::alternative, alt.name, alt.span);
+                a->parent      = sym;
+                a->alternative = &alt;
+                sym->members[alt.name].push_back(a);
+                sym->member_order.push_back(a);
+            }
+            resolve_type(*e.tag_type);
+            for (EnumAlternative& alt : e.alternatives) {
+                if (alt.payload) resolve_type(*alt.payload);
+                if (alt.value) resolve_expr(*alt.value);
+            }
+            return sym;
+        }
+        for (const DeclPtr& mem : d.as<TypeDecl>().members) add_member(m, sym, *mem, false);
+        for (const DeclPtr& mem : d.as<TypeDecl>().members) resolve_decl(*mem, sym);
+        return sym;
+    }
+
+    /// Makes the symbol of a function template instance: the copy's signature and body are resolved
+    /// in the template's module, with its parameters declared (see build_instance).
+    Symbol* build_function_instance(Module& m, bool from_header, FunctionDecl& d, std::vector<Symbol*>& params) {
+        FileScope fs(*this, &m, from_header);
+        Symbol*   sym  = m.make(SymbolKind::function, d.name, d.name_span);
+        sym->decl      = &d;
+        sym->in_header = false;
+        TemplateScope ts(*this, d);
+        params = template_params_.back();
+        resolve_function(d, nullptr);
+        return sym;
+    }
+
 private:
     // --- diagnostics ----------------------------------------------------------------------
 
@@ -982,6 +1031,18 @@ private:
 
     // --- paths ----------------------------------------------------------------------------
 
+    /// A template type needs exactly its parameters as arguments (spec 14).
+    void check_template_arity(const Path& path, const Symbol* s, Span span) {
+        if (!s || !s->is_type() || !s->decl || !s->decl->is_template) return;
+        std::size_t given = path.segments.empty() ? 0 : path.segments.back().template_args.size();
+        std::size_t wanted = s->decl->template_params.size();
+        if (given == wanted) return;
+        error(DiagCode::E4180, span,
+              std::format("'{}' takes {} template argument{}, but {} {} given", s->name, wanted, wanted == 1 ? "" : "s",
+                          given, given == 1 ? "is" : "are"),
+              "wrong number of template arguments");
+    }
+
     void resolve_template_args(Path& path) {
         for (PathSegment& seg : path.segments) {
             for (TemplateArg& arg : seg.template_args) {
@@ -1245,6 +1306,7 @@ private:
         case TypeKind::named: {
             auto& nt  = t.as<NamedType>();
             nt.symbol = lookup_path(nt.path, Want::type, nt.span);
+            check_template_arity(nt.path, nt.symbol, nt.span);
             return;
         }
         case TypeKind::reference: resolve_type(*t.as<ReferenceType>().inner); return;
@@ -1294,11 +1356,15 @@ private:
         case ExprKind::int_literal:
         case ExprKind::float_literal:
         case ExprKind::char_literal:
-        case ExprKind::string_literal:
         case ExprKind::bool_literal:
         case ExprKind::nullptr_literal:
         case ExprKind::default_:
         case ExprKind::error: return;
+        case ExprKind::string_literal:
+            for (FormatPart& part : e.as<LiteralExpr>().format_parts) {
+                if (part.expr) resolve_expr(*part.expr);
+            }
+            return;
         case ExprKind::this_:
             if (!fn_.has_this) {
                 error(DiagCode::E3027, e.span,
@@ -1582,7 +1648,8 @@ private:
         for (std::size_t i = 0; i < l.captures.size(); ++i) {
             Capture& c = l.captures[i];
             if (c.kind == CaptureKind::init) continue;
-            outer[i] = lookup_local(c.name, c.span);
+            outer[i]   = lookup_local(c.name, c.span);
+            c.captured = outer[i];
             if (!outer[i]) {
                 Diagnostic& e = error(DiagCode::E3020, c.span, std::format("cannot capture '{}': no such local", c.name),
                                       "not a local variable");
@@ -1718,6 +1785,18 @@ std::string access_prefix(const Symbol& s) {
 } // namespace
 
 void resolve_program(Program& program, DiagnosticEngine& diags) { Resolver(program, diags).run(); }
+
+Symbol* resolve_instance(Program& program, DiagnosticEngine& diags, const Symbol* templ, Decl& decl,
+                         std::vector<Symbol*>& params) {
+    bool from_header = !templ->definition && templ->in_header;
+    return Resolver(program, diags).build_instance(*templ->module, from_header, decl, params);
+}
+
+Symbol* resolve_function_instance(Program& program, DiagnosticEngine& diags, const Symbol* templ,
+                                  FunctionDecl& decl, std::vector<Symbol*>& params) {
+    bool from_header = !templ->definition && templ->in_header;
+    return Resolver(program, diags).build_function_instance(*templ->module, from_header, decl, params);
+}
 
 void print_symbols(std::ostream& out, const Module& m, const SourceManager& sources) {
     out << "module " << m.name << '\n';

@@ -1,6 +1,5 @@
-
-// A minimal program that exercises M4's codegen target. Once the compiler reaches M4, 
-// `riftc compile examples/compile_check.rfts -o compile_check` should produce a binary that exits 0
+// A minimal program: `riftc build examples/compile_check.rifts` writes
+// examples/build/debug/compile_check, which exits with status 0.
 
 u32 main() {
     return 0u32;

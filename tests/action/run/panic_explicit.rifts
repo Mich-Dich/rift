@@ -1,0 +1,10 @@
+// RUN: riftc run %s
+// A panic prints the Rift location and message on stderr and aborts (spec 11, 16).
+import std;
+
+void main() {
+    std::println("before");
+    u32 code = 3;
+    std::panic(f"giving up with code {code}");
+    std::println("not reached");
+}

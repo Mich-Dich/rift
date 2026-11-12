@@ -1,0 +1,11 @@
+// RUN: riftc check --diagnostic-format=short %s
+import std;
+
+struct holder { u32& r; }
+
+void sink(std::string s) { }
+
+void f(std::string a) {
+    sink(move a);
+    sink(move a);
+}

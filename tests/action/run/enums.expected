@@ -1,0 +1,6 @@
+exit: 0
+--- stdout
+blue = 6, green = 5, same: true
+areas 12.0 7.0 0.0
+wide rect 2.0
+--- stderr

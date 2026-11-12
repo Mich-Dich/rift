@@ -19,6 +19,7 @@
 
 namespace rift::types {
 class TypeContext;
+struct Type;
 }
 
 namespace rift::sema {
@@ -66,12 +67,19 @@ struct Symbol {
     std::vector<Symbol*>                        bases;          // resolved base class / interfaces
     bool                                        has_opaque_base = false;   // e.g. std::formattable
 
+    // Instances of a template type (spec 14): the template, the copy's index among the template's
+    // instances (for names), and the type each template parameter stands for.
+    const Symbol*                               template_of    = nullptr;
+    unsigned                                    instance_index = 0;
+    std::map<const Symbol*, const types::Type*> template_subst;
+
     // Alternatives.
     const ast::EnumAlternative* alternative = nullptr;
 
     // Locals.
     LocalKind local_kind   = LocalKind::variable;
     bool      is_reference = false;   // declared with a reference type (`T& x`): cannot be moved
+    const types::Type* type = nullptr;  // locals: set by the type checker
 
     [[nodiscard]] bool is_type() const {
         return kind == SymbolKind::struct_ || kind == SymbolKind::class_ ||
@@ -85,6 +93,15 @@ struct Symbol {
         return decl && (decl->kind == ast::DeclKind::class_) && decl->as<ast::TypeDecl>().is_open;
     }
 };
+
+/// The parameter substitution of the template instance that declares `s` (a member, payload or
+/// alternative belongs to its enclosing type), or null outside instances.
+inline const std::map<const Symbol*, const types::Type*>* substitution_of(const Symbol* s) {
+    for (; s; s = s->parent) {
+        if (!s->template_subst.empty()) return &s->template_subst;
+    }
+    return nullptr;
+}
 
 /// One parsed file of a module.
 struct ModuleFile {
@@ -121,6 +138,12 @@ struct Program {
     std::map<std::string, std::unique_ptr<Module>> modules;   // by module name
     Module*                                        entry = nullptr;
     std::shared_ptr<types::TypeContext>            types;     // owns every Type the checker creates
+    /// Instances of template types, in creation order. They are not in any module's items.
+    std::vector<Symbol*>                           instances;
+    /// The AST copy of each instance (same order), which the later phases walk.
+    std::vector<ast::Decl*>                        instance_copies;
+    /// The re-parsed copies of templates that instances are made of (see check.cpp).
+    std::deque<ast::File>                          instance_files;
 };
 
 } // namespace rift::sema

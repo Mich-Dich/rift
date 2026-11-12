@@ -1,0 +1,9 @@
+exit: 0
+--- stdout
+zero small negative large
+collatz(27) = 111
+sum = 147
+count = 6
+block value 42
+sign 1
+--- stderr

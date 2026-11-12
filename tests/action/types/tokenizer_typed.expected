@@ -4,7 +4,7 @@ exit: 0
 (enum token_kind : u8 (number) (plus) (minus) (star) (end))
 (enum token : u8 (number f64) (op token_kind) (end))
 (enum parse_error : u8 (bad_char (= (int 1 : u8))) (empty))
-(struct cursor
+(view struct cursor
   (field text : std::str)
   (field pos : usize (int 0 : usize))
   (fn done -> bool
@@ -12,7 +12,7 @@ exit: 0
       (return : never
         (>= : bool
           (.pos : usize (this : cursor&))
-          (call : {unknown} (.len : {unknown} (.text : std::str (this : cursor&))))))))
+          (call : usize (.len : {unknown} (.text : std::str (this : cursor&))))))))
   (fn advance -> void mut
     (param by : usize)
     (block (assign += (.pos : usize (this : mut cursor&)) (path by : usize)))))
@@ -88,7 +88,7 @@ exit: 0
         (arm _ (string "other" : std::static_str))))
     (return : never
       (if : u32
-        (> : bool (call : {unknown} (.len : {unknown} (path label : std::str))) (int 2 : {unknown}))
+        (> : bool (call : usize (.len : {unknown} (path label : std::str))) (int 2 : usize))
         (block (value (int 1 : u32)))
         (else (block : u32 (value (int 0 : u32))))))))
 (fn bits -> void
@@ -142,7 +142,9 @@ exit: 0
         (arm
           (alt std::error (bind e))
           (block : never
-            (call : {unknown} (path std::eprintln) (format-string "error: {e}" : std::format_args))
+            (call : {unknown}
+              (path std::eprintln)
+              (format-string "error: {e}" : std::format_args (hole (path e : parse_error))))
             (return : never (path std::exit_code::failure : {unknown}))))))
     (var a : adder (new adder : adder))
     (var r : f64
@@ -188,6 +190,10 @@ exit: 0
         (path table_size : u32)))
     (call : {unknown}
       (path std::println)
-      (format-string "{total} {v} {area} {big}" : std::format_args))
+      (format-string "{total} {v} {area} {big}" : std::format_args
+        (hole (path total : u32))
+        (hole (path v : f64))
+        (hole (path area : f64))
+        (hole (path big : u32))))
     (return : never (path std::exit_code::success : {unknown}))))
 --- stderr

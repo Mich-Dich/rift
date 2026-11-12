@@ -1,0 +1,7 @@
+import std;
+import geometry::area;
+
+void main() {
+    geometry::area::rect r = geometry::area::rect{ .w = 3, .h = 4 };
+    std::println(f"area {geometry::area::of(r)}, doubled {geometry::area::doubled(r)}");
+}

@@ -1,0 +1,20 @@
+// RUN: riftc run %s
+// File-scope constants and statics (spec 03).
+import std;
+
+compile_time u32 limit = 3;
+static f64 scale = 2.5;
+static mut u32 calls = 0;
+
+u32 next() {
+    unsafe {
+        calls += 1;
+        return calls;
+    }
+}
+
+void main() {
+    for (u32 i : 0..limit) {
+        std::println(f"call {next()} scaled {scale * cast<f64>(i)}");
+    }
+}

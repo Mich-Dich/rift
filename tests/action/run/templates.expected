@@ -1,0 +1,11 @@
+exit: 0
+--- stdout
+box 7
+box 9
+flag true
+nested 3
+pair 1 false
+maybe 42 0
+holder 5
+holder dropped with 5
+--- stderr

@@ -1,0 +1,17 @@
+// feature 08/10: a struct pattern made only of bindings covers its alternative.
+struct size { u32 w = 0; u32 h = 0; }
+enum shape : u8 { rect(size), point }
+
+u32 area(shape s) {
+    return match (s) {
+        shape::rect(size{ .w = w, .h = h }) => w * h,
+        shape::point => 0,
+    };
+}
+
+u32 partial(shape s) {
+    return match (s) {                            //~ error[E4060]: does not cover shape::rect
+        shape::rect(size{ .w = 0, .h = h }) => h,
+        shape::point => 0,
+    };
+}

@@ -1,0 +1,19 @@
+// Calls of function templates (spec 14): deduction and instantiation.
+
+template<type T>
+T larger(T a, T b) {
+    if (a > b) {               //~ error[E4013]: 'bool' values cannot be ordered
+        return a;
+    }
+    return b;
+}
+
+template<type T>
+T make() {
+    return 0;
+}
+
+void main() {
+    bool flag = larger(true, false);
+    u32 n     = make();        //~ error[E4160]: cannot deduce template parameter 'T' of 'make'
+}

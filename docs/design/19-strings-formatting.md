@@ -49,7 +49,8 @@ std::file in = std::file::open(std::filesystem::executable_dir() / "employees.cs
 std::file in = std::file::open(std::filesystem::path::relative("employees.csv"))?;     // OK: explicitly relative
 std::file in = std::file::open(user_path)?;                           // OK: run-time value, caller's choice
 ```
-- The warning only applies to **string literals** passed as paths.
+- The warning only applies to paths known at compile time, such as **string literals**.
+- It isn't built into the compiler: it's an entry check of `std::file::open` in the standard library's source (see 23, example 7). Silence it with `--warn=std::relative_path=off`.
 - `std::filesystem::executable_dir()` returns the directory that contains the executable. It was called `get_executable_path` in v0.2; the new name says it's a directory.
 
 ## Rationale

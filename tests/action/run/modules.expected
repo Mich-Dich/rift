@@ -1,0 +1,4 @@
+exit: 0
+--- stdout
+area 12, doubled 24
+--- stderr

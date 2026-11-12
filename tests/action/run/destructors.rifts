@@ -1,0 +1,101 @@
+// RUN: riftc run %s
+// Destructors (spec 12): scope exit in reverse order, moves, returns, loops, reassignment,
+// discarded temporaries and fields.
+import std;
+
+class noisy {
+public:
+    static noisy named(u32 id) {
+        std::println(f"make {id}");
+        return noisy{ .id = id };
+    }
+    u32 get() {
+        return this.id;
+    }
+    ~noisy() {
+        std::println(f"drop {this.id}");
+    }
+private:
+    u32 id = 0;
+}
+
+struct pair {
+    noisy left;
+    noisy right;
+}
+
+void take(noisy n) {
+    std::println(f"took {n.get()}");
+}
+
+void scope_order() {
+    noisy a = noisy::named(1);
+    noisy b = noisy::named(2);
+    std::println("end of scope_order");
+}
+
+void moves() {
+    noisy a = noisy::named(3);
+    take(move a);
+    noisy b = noisy::named(4);
+    noisy c = move b;
+    std::println("moved");
+}
+
+void maybe(bool give) {
+    noisy a = noisy::named(5);
+    if (give) {
+        take(move a);
+    }
+    std::println("after if");
+}
+
+noisy pick(u32 id) {
+    noisy first = noisy::named(id);
+    noisy second = noisy::named(id + 100);
+    return move second;
+}
+
+void loops() {
+    mut u32 i = 0;
+    while (i < 3) {
+        noisy item = noisy::named(10 + i);
+        i += 1;
+        if (i == 2) {
+            continue;
+        }
+        if (i == 3) {
+            break;
+        }
+        std::println("body");
+    }
+}
+
+void reassign() {
+    mut noisy slot = noisy::named(20);
+    slot = noisy::named(21);
+    std::println("reassigned");
+}
+
+void nested() {
+    pair p = pair{ .left = noisy::named(40), .right = noisy::named(41) };
+    std::println("pair built");
+}
+
+void discarded() {
+    _ = noisy::named(30);
+    std::println("after discard");
+}
+
+void main() {
+    scope_order();
+    moves();
+    maybe(true);
+    maybe(false);
+    noisy kept = pick(6);
+    std::println(f"kept {kept.get()}");
+    loops();
+    reassign();
+    nested();
+    discarded();
+}

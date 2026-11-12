@@ -1,0 +1,18 @@
+// RUN: riftc run %s
+// A panic aborts: destructors of live locals do not run (spec 12).
+import std;
+
+class noisy {
+public:
+    ~noisy() {
+        std::println("drop");
+    }
+}
+
+void main() {
+    noisy n = noisy{};
+    std::println("before");
+    u8 a = 255;
+    u8 b = a + 1;
+    std::println(f"{b}");
+}

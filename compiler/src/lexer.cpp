@@ -70,6 +70,9 @@ Lexer::Lexer(const SourceFile& file, FileId id, DiagnosticEngine& diags)
     }
 }
 
+Lexer::Lexer(const SourceFile& file, FileId id, DiagnosticEngine& diags, std::size_t begin, std::size_t end)
+    : file_(file), id_(id), text_(file.text().substr(0, end)), diags_(diags), pos_(begin) {}
+
 bool Lexer::at_end(std::size_t ahead) const { return pos_ + ahead >= text_.size(); }
 char Lexer::peek(std::size_t ahead) const { return at_end(ahead) ? '\0' : text_[pos_ + ahead]; }
 
@@ -95,6 +98,11 @@ std::vector<Token> Lexer::tokenize() {
 
 std::vector<Token> tokenize(const SourceFile& file, FileId id, DiagnosticEngine& diags) {
     return Lexer(file, id, diags).tokenize();
+}
+
+std::vector<Token> tokenize_range(const SourceFile& file, FileId id, DiagnosticEngine& diags, std::size_t begin,
+                                  std::size_t end) {
+    return Lexer(file, id, diags, begin, end).tokenize();
 }
 
 // --- trivia ---------------------------------------------------------------------------------

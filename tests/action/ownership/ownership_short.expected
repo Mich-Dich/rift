@@ -1,0 +1,8 @@
+exit: 1
+--- stdout
+--- stderr
+tests/action/ownership/ownership_short.rifts:4:17: error[E5010]: field 'holder::r' is a reference
+tests/action/ownership/ownership_short.rifts:4:17: note: references only live in parameters, locals and loops; store a value, a smart pointer, or declare the type 'view'
+tests/action/ownership/ownership_short.rifts:10:15: error[E5002]: 'a' is used after it was moved
+tests/action/ownership/ownership_short.rifts:9:10: note: moved here
+tests/action/ownership/ownership_short.rifts:10:15: note: assign a new value to 'a' first, or move a '.clone()' instead

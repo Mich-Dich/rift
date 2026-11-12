@@ -1,0 +1,14 @@
+// feature 12/18: '[move x]' moves, '[x]' copies (copy types only), '[&x]' borrows.
+import std;
+
+void lambdas() {
+    std::string name = std::string::from("n");
+    auto own = [move name]() { };
+    std::str v = name;                      //~ error[E5002]: 'name' is used after it was moved
+    std::string other = std::string::from("o");
+    auto bad = [other]() { };               //~ error[E5001]: capturing 'other' by copy
+    auto look = [&other]() { };
+    auto fresh = [dup = other.clone()]() { };
+    u32 n = 1;
+    auto ok = [n]() { return n; };
+}

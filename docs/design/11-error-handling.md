@@ -44,6 +44,7 @@ These things panic:
 | Trigger | See |
 |---|---|
 | `std::panic(f"...")` | - |
+| A failed `run_time check` (or the run-time half of `compile_time run_time check`) | 23 |
 | Integer overflow, division by zero | 16 |
 | Shift count ≥ bit width, `bit(n)` out of range at run time | 16 |
 | Index out of bounds | 20 |
@@ -55,4 +56,4 @@ These things panic:
 ## Rationale
 - **No implicit error conversion:** v0.2 depended on an undesigned `std::convert` trait. `.or_error(parse_error::bad_number)` is short, and it shows exactly which error the caller gets.
 - **Must-use results:** an ignored error is a silent bug. `_ =` makes ignoring it a visible decision.
-- **Abort, not unwind:** there are no exceptions, so unwinding would only exist for panics. Abort keeps codegen simple and predictable. Configurable panic handling (for example for embedded targets) is in 22.
+- **Abort, not unwind:** there are no exceptions, so unwinding would only exist for panics. Abort keeps codegen simple and predictable. A build mode can replace the message + abort with a CPU trap (`.panic = trap`, see 24), for example on embedded targets. A custom panic handler is still open (see 22).

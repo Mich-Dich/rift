@@ -1,0 +1,56 @@
+// RUN: riftc run %s
+// if/match/blocks as values, loops with break and continue (spec 10).
+import std;
+
+std::static_str classify(i32 n) {
+    return match (n) {
+        0 => "zero",
+        1..=9 => "small",
+        x if x < 0 => "negative",
+        _ => "large",
+    };
+}
+
+u32 collatz_steps(mut u64 n) {
+    mut u32 steps = 0;
+    while (n != 1) {
+        n = if (n % 2 == 0) { n / 2 } else { 3 * n + 1 };
+        steps += 1;
+    }
+    return steps;
+}
+
+void main() {
+    std::println(f"{classify(0)} {classify(5)} {classify(-3)} {classify(99)}");
+    std::println(f"collatz(27) = {collatz_steps(27)}");
+    mut u32 sum = 0;
+    for (u32 i : 0..100) {
+        if (i % 3 == 0) {
+            continue;
+        }
+        if (i > 20) {
+            break;
+        }
+        sum += i;
+    }
+    std::println(f"sum = {sum}");
+    mut u32 count = 0;
+    for (u8 i : 250..=255) {        // ends at the type's maximum without overflowing
+        count += 1;
+    }
+    for (u8 i : 5..5) {
+        count += 100;                // empty range
+    }
+    std::println(f"count = {count}");
+    u32 v = {
+        u32 a = 20;
+        u32 b = 22;
+        a + b
+    };
+    std::println(f"block value {v}");
+    i32 sign = match (true) {
+        true => 1,
+        false => -1,
+    };
+    std::println(f"sign {sign}");
+}

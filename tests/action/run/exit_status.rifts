@@ -1,0 +1,5 @@
+// RUN: riftc run %s
+// An integer returned from main is the process exit status (spec 04).
+u8 main() {
+    return 42;
+}

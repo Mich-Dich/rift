@@ -1,5 +1,7 @@
 #include "rift/types.hpp"
 
+#include "rift/ast_printer.hpp"
+
 namespace rift::types {
 
 bool Type::is_user(sema::SymbolKind k) const { return kind == Kind::user && symbol && symbol->kind == k; }
@@ -88,6 +90,78 @@ const Type* TypeContext::external(const std::string& spelling) {
     return externals_[spelling] = make(Type{Kind::external, 0, false, false, nullptr, nullptr, false, spelling});
 }
 
+const Type* TypeContext::lower(const ast::TypeExpr& t, const std::map<const sema::Symbol*, const Type*>* subst) {
+    using namespace ast;
+    switch (t.kind) {
+    case TypeKind::auto_:
+    case TypeKind::deduce:
+    case TypeKind::function: return error_;
+    case TypeKind::reference: {
+        const auto& r = t.as<ReferenceType>();
+        return reference(lower(*r.inner, subst), r.is_mut);
+    }
+    case TypeKind::named: break;
+    }
+    const auto& nt   = t.as<NamedType>();
+    const auto& segs = nt.path.segments;
+    if (segs.size() == 1 && !nt.symbol) {
+        if (const Type* b = builtin(segs[0].name)) return b;
+    }
+    if (nt.symbol) {
+        const sema::Symbol* s = nt.symbol;
+        if (s->kind == sema::SymbolKind::type_param) {
+            if (subst) {
+                if (auto it = subst->find(s); it != subst->end()) return it->second;
+            }
+            return type_param(s);
+        }
+        if (s->is_type() && s->decl && !s->decl->is_template) return user(s);
+        if (s->is_type() && s->decl && s->decl->is_template) {
+            // `box<u32>`: an instance of the template for these arguments. Arguments that are
+            // still unknown (inside a template that is not instantiated) make it unknown too.
+            std::vector<const Type*> args;
+            for (const TemplateArg& a : segs.back().template_args) {
+                if (!a.type) return error_;   // value arguments are not supported yet
+                args.push_back(lower(*a.type, subst));
+            }
+            return instance(s, args);
+        }
+        return error_;
+    }
+    if (!segs.empty() && segs[0].name == "std") {
+        if (segs.size() == 2 && segs[1].name == "raw_ptr" && segs[1].template_args.size() == 1 &&
+            segs[1].template_args[0].type) {
+            const TemplateArg& arg = segs[1].template_args[0];
+            return pointer(lower(*arg.type, subst), arg.is_mut);
+        }
+        const Type*              ext = external(ast::to_string(nt.path));
+        std::vector<const Type*> args;
+        for (const TemplateArg& a : segs.back().template_args) {
+            args.push_back(a.type ? lower(*a.type, subst) : error_);
+        }
+        external_args_[ext] = args;
+        return ext;
+    }
+    return error_;
+}
+
+const Type* TypeContext::instance(const sema::Symbol* templ, const std::vector<const Type*>& args) {
+    auto key = std::make_pair(templ, args);
+    if (auto it = instances_.find(key); it != instances_.end()) return it->second;   // made before
+    if (!instantiator_ || !templ->decl || args.size() != templ->decl->template_params.size()) return error_;
+    for (const Type* a : args) {
+        if (a->is_unknown()) return error_;
+    }
+    const Type* t = instantiator_(templ, args);
+    instances_[key] = t;
+    return t;
+}
+
+const std::vector<const Type*>* TypeContext::external_args(const Type* t) const {
+    auto it = external_args_.find(t);
+    return it == external_args_.end() ? nullptr : &it->second;
+}
+
 std::string to_string(const Type* t) {
     if (!t) return "?";
     switch (t->kind) {
@@ -110,6 +184,21 @@ bool literal_fits(u128 magnitude, bool negative, const Type* t) {
     }
     u128 limit = u128{1} << (bits - 1);   // |min|
     return negative ? magnitude <= limit : magnitude <= limit - 1;
+}
+
+bool is_mutating_library_method(const Type* receiver, std::string_view method) {
+    if (!receiver || receiver->kind != Kind::external) return false;
+    std::string_view base = receiver->external_base();
+    static const char* containers[] = {"std::darray", "std::string", "std::hash_map", "std::tree_map", "std::bitset"};
+    static const char* mutating[]   = {"push", "pop", "insert", "remove", "clear", "retain", "sort", "sort_by_key",
+                                       "resize", "reserve", "append", "extend", "truncate", "erase", "set"};
+    bool is_container = false;
+    for (const char* c : containers) is_container = is_container || base == c;
+    if (!is_container) return false;
+    for (const char* m : mutating) {
+        if (method == m) return true;
+    }
+    return false;
 }
 
 std::string integer_range(const Type* t) {
