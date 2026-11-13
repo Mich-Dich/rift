@@ -1,0 +1,48 @@
+// RUN: riftc run %s
+// Destructors with std::option / std::result: the part that is not used is destroyed
+// (value_or), and '?' destroys the function's locals before returning the error (spec 11, 12).
+import std;
+
+class noisy {
+public:
+    u32 id = 0;
+    ~noisy() { std::println(f"drop {this.id}"); }
+}
+
+enum oops : u8 { failed }
+
+noisy make(u32 id) { return noisy{ .id = id }; }
+
+std::option<noisy> maybe(bool give, u32 id) {
+    if (give) { return std::some(make(id)); }
+    return std::none;
+}
+
+std::result<noisy, oops> attempt(bool ok, u32 id) {
+    if (ok) { return std::ok(make(id)); }
+    return std::error(oops::failed);
+}
+
+std::result<u32, oops> chain(bool ok) {
+    noisy guard = make(100);
+    noisy n = attempt(ok, 7)?;
+    std::println(f"chain has {n.id}");
+    return std::ok(n.id);
+}
+
+std::exit_code main() {
+    std::println("value_or some:");
+    noisy a = maybe(true, 1).value_or(make(2));
+    std::println(f"a = {a.id}");
+    std::println("value_or none:");
+    noisy b = maybe(false, 3).value_or(make(4));
+    std::println(f"b = {b.id}");
+    std::println("chain ok:");
+    _ = chain(true);
+    std::println("chain error:");
+    _ = chain(false);
+    std::println("discarded option:");
+    _ = maybe(true, 9);
+    std::println("end");
+    return std::exit_code::failure;
+}

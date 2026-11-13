@@ -60,7 +60,7 @@ public:
     [[nodiscard]] const std::vector<Diagnostic>& all() const { return diagnostics_; }
 
     /// Orders diagnostics by file and position (stable), so later phases' errors don't appear
-    /// before earlier lines.
+    /// before earlier lines, and drops exact repeats (same code, place and message).
     void sort_by_location();
     [[nodiscard]] std::size_t error_count() const;
     [[nodiscard]] std::size_t warning_count() const;

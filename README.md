@@ -3,15 +3,20 @@
 The Rift programming language - C++-inspired, but explicitly simpler,
 safer, and more consistent. The language design lives in [`docs/design/`](docs/design/README.md).
 
-**Status:** M6 - code generation. `riftc build` turns a program into a native executable:
-the checked program is translated to C and compiled with the system's GCC or Clang. The
-supported core is integers and floats with checked arithmetic (overflow, division by zero and
-bad shifts panic, spec 16), `bool`, `char`, string literals, structs and classes with methods,
-enums with and without payloads, `match`, `if`/blocks as values, `while`, `for` over ranges,
-references, globals, several modules, and `std::print`/`println`/`eprintln`/`panic` with
-f-strings. Everything else (the standard library, templates, lambdas, inheritance,
-destructors, ...) is reported as E6001 where it is used. All front-end checks of M1-M5 run
-before code generation.
+**Status:** M7 - code generation through LLVM. `riftc build` turns a program into a native
+executable: the checked program becomes LLVM IR, LLVM compiles it to an object file, and the
+system's `cc` only links it (no C code is generated). The supported core is integers and floats
+with checked arithmetic (overflow, division by zero and bad shifts panic, spec 16), `bool`,
+`char`, string literals, structs and classes with methods and destructors, enums with and
+without payloads, templates (types and functions), `match`, `if`/blocks as values, `while`,
+`for` over ranges, references, globals, several modules, `std::print`/`println`/`eprintln`/
+`panic` with f-strings, and the first part of the standard library: `std::option`,
+`std::result` (`std::ok`/`error`/`some`/`none`, `?`, `value_or`, `expect`, `or_error`),
+`std::exit_code` and `cast::checked`. Compile-time code runs in the compiler: `compile_time`
+constants and functions, `if compile_time`, types as values (`compile_time type t = u32;`),
+reflection with `std::meta` and `for compile_time` loops (spec 26). Containers and strings (`std::darray`, `std::string`),
+lambdas, inheritance and virtual calls are not generated yet; they are reported as E6001 where
+they are used. All front-end checks of M1-M5 run before code generation.
 
 ## Building
 
@@ -74,13 +79,15 @@ Details, file formats and the `XFAIL` workflow for not-yet-implemented features:
 | `compiler/include/rift/ast.hpp` | The syntax tree; `ast_printer.hpp` prints it for `riftc parse` |
 | `compiler/include/rift/symbols.hpp` | Modules and symbols; `modules.hpp` loads imports, `resolve.hpp` resolves names |
 | `compiler/include/rift/types.hpp` | Types; `check.hpp` is the type checker, `ownership.hpp` the ownership checker |
+| `compiler/include/rift/compile_time.hpp` | The compile-time evaluator (constants, `if`/`for compile_time`, `std::meta`); `ast_clone.hpp` copies loop bodies |
 | `compiler/include/rift/llvm_backend.hpp` | The LLVM backend: checked program to LLVM IR, object file, executable; the runtime is LLVM IR in `src/llvm_runtime.cpp` |
 | `compiler/include/rift/diagnostic_codes.def` | Every diagnostic code, in one table |
 | `compiler/include/rift/token_kinds.def` | Every token kind, keyword and operator |
 | `compiler/src/` | `librift` implementation |
+| `library/std/` | The standard library's Rift source, compiled into `riftc` and loaded by `import std;` |
 | `compiler/driver/main.cpp` | The `riftc` executable (thin wrapper around `rift::run_driver`) |
 | `tests/run_tests.py` | Test runner for all three suites |
 | `tests/unit/`, `tests/feature/`, `tests/action/` | The test suites |
 | `scripts/test.sh` | Build + test in one command |
 | `examples/` | Example `.rifts` programs |
-| `docs/design/` | Language specification (v0.3) |
+| `docs/design/` | Language specification (v0.6) |

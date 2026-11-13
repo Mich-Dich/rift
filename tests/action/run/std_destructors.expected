@@ -1,0 +1,19 @@
+exit: 1
+--- stdout
+value_or some:
+drop 2
+a = 1
+value_or none:
+b = 4
+chain ok:
+chain has 7
+drop 7
+drop 100
+chain error:
+drop 100
+discarded option:
+drop 9
+end
+drop 4
+drop 1
+--- stderr

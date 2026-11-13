@@ -72,6 +72,7 @@ struct Symbol {
     const Symbol*                               template_of    = nullptr;
     unsigned                                    instance_index = 0;
     std::map<const Symbol*, const types::Type*> template_subst;
+    std::vector<const types::Type*>             template_args;   // the arguments in order
 
     // Alternatives.
     const ast::EnumAlternative* alternative = nullptr;
@@ -80,6 +81,10 @@ struct Symbol {
     LocalKind local_kind   = LocalKind::variable;
     bool      is_reference = false;   // declared with a reference type (`T& x`): cannot be moved
     const types::Type* type = nullptr;  // locals: set by the type checker
+
+    // Compile time (spec 15, 26).
+    bool is_type_value = false;   // a compile_time variable or parameter of type `type`: usable as a type
+    std::shared_ptr<const ct::Value> ct_value;   // the value of a compile_time constant, once evaluated
 
     [[nodiscard]] bool is_type() const {
         return kind == SymbolKind::struct_ || kind == SymbolKind::class_ ||
@@ -137,6 +142,9 @@ struct Module {
 struct Program {
     std::map<std::string, std::unique_ptr<Module>> modules;   // by module name
     Module*                                        entry = nullptr;
+    /// The standard library module (library/std, built into riftc), loaded on the first
+    /// `import std`; null if nothing imports it. Also in `modules` as "std".
+    Module*                                        std_module = nullptr;
     std::shared_ptr<types::TypeContext>            types;     // owns every Type the checker creates
     /// Instances of template types, in creation order. They are not in any module's items.
     std::vector<Symbol*>                           instances;

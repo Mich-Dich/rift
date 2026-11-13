@@ -1,0 +1,77 @@
+// RUN: riftc run %s
+// std::option and std::result at run time: '?', value_or, expect, or_error,
+// cast::checked, default, and std::exit_code from main (spec 08, 11, 17, 04).
+import std;
+
+enum io_error : u8 { closed, full }
+enum parse_error : u8 { bad_line, bad_number }
+
+std::result<u32, io_error> write(u32 x) {
+    if (x > 10) { return std::error(io_error::full); }
+    return std::ok(x * 2);
+}
+
+std::option<u32> half(u32 x) {
+    if (x % 2 == 1) { return std::none; }
+    return std::some(x / 2);
+}
+
+std::result<u32, io_error> twice(u32 x) {
+    u32 a = write(x)?;
+    u32 b = write(a)?;
+    return std::ok(b);
+}
+
+std::option<u32> quarter(u32 x) {
+    u32 h = half(x)?;
+    return half(h);
+}
+
+std::result<u32, parse_error> parse_digit(u32 x) {
+    u32 v = half(x).or_error(parse_error::bad_number)?;
+    return std::ok(v);
+}
+
+void show(std::result<u32, io_error> r) {
+    match (r) {
+        std::ok(v) => std::println(f"ok {v}"),
+        std::error(io_error::full) => std::println("error full"),
+        std::error(_) => std::println("error closed"),
+    }
+}
+
+void show_option(std::option<u32> o) {
+    match (o) {
+        std::some(v) => std::println(f"some {v}"),
+        std::none => std::println("none"),
+    }
+}
+
+std::exit_code main() {
+    show(twice(2));
+    show(twice(4));
+    show(twice(20));
+    show_option(quarter(8));
+    show_option(quarter(6));
+    show_option(quarter(3));
+    std::println(f"{half(3).value_or(99)} {half(4).value_or(99)}");
+    std::println(f"{write(3).value_or(0)} {write(30).value_or(0)}");
+    match (parse_digit(7)) {
+        std::ok(v) => std::println(f"digit {v}"),
+        std::error(e) => std::println(f"bad {cast<u8>(e)}"),
+    }
+    show_option(cast::checked<u32>(cast::checked<u8>(300u32).value_or(1u8)));
+    show_option(cast::checked<u32>(-1i32));
+    show_option(cast::checked<u32>(12i64));
+    show_option(cast::checked<u32>(2.5f64));
+    show_option(cast::checked<u32>(1e10f64));
+    show_option(cast::checked<u32>(42.0f64));
+    std::option<u32> nothing = default;
+    show_option(nothing);
+    std::option<u32> maybe = if (true) { std::some(5) } else { std::none };
+    show_option(maybe);
+    u32 got = half(4).expect("four is even");
+    std::println(f"got {got}");
+    u32 boom = half(5).expect(f"{5u32} is odd");
+    return std::exit_code::failure;
+}

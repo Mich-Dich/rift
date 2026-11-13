@@ -3,6 +3,7 @@
 #include "rift/ast_printer.hpp"
 #include "rift/lexer.hpp"
 #include "rift/parser.hpp"
+#include "rift/std_library.hpp"
 
 #include <filesystem>
 #include <format>
@@ -74,6 +75,11 @@ private:
         if (!id) {
             return;   // the driver already checked the entry file; imports are checked before
         }
+        parse_into(module, *id, is_header);
+    }
+
+    void parse_into(sema::Module& module, FileId id_value, bool is_header) {
+        std::optional<FileId> id = id_value;
         sema::ModuleFile file{*id, {}};
         file.ast.file = *id;
         std::size_t errors_before = diags_.error_count();
@@ -103,6 +109,7 @@ private:
                 std::string name = ast::to_string(imp->path);
                 if (imp->path.segments.front().name == "std") {
                     (header ? module.header_imports_std : module.source_imports_std) = true;
+                    load_std();
                     continue;
                 }
                 if (name == module.name) {
@@ -116,6 +123,17 @@ private:
                 }
             }
         }
+    }
+
+    /// The standard library is built into riftc (library/std/std.rifth) and loaded once.
+    void load_std() {
+        if (program_.std_module) return;
+        auto module  = std::make_unique<sema::Module>();
+        module->name = "std";
+        parse_into(*module, sources_.add(std::string(std_header_path), std::string(std_header_text())), true);
+        program_.std_module = module.get();
+        program_.modules.emplace("std", std::move(module));
+        state_["std"] = State::done;
     }
 
     sema::Module* load_module(const std::string& name, const ast::ImportDecl& imp) {

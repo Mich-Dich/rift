@@ -4,8 +4,9 @@
 //
 //   import geometry;          -> <root>/geometry.rifth  (+ geometry.rifts if present)
 //   import shapes::circle;    -> <root>/shapes/circle.rifth
-//   import std; import std::x -> the standard library (not loaded from disk yet; `std::` names
-//                                are accepted unchecked until the library exists)
+//   import std; import std::x -> the standard library, built into riftc (library/std/std.rifth),
+//                                loaded once as module "std". `std::` names it does not declare
+//                                yet are accepted unchecked (the compiler knows them itself)
 
 #include "rift/diagnostics.hpp"
 #include "rift/symbols.hpp"

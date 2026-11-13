@@ -14,6 +14,7 @@
 #include "rift/source.hpp"
 #include "rift/token.hpp"
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,6 +24,9 @@ struct Symbol;
 }
 namespace rift::types {
 struct Type;
+}
+namespace rift::ct {
+struct Value;
 }
 
 namespace rift::ast {
@@ -76,6 +80,9 @@ enum class ExprKind {
 struct Expr : Node<ExprKind> {
     using Node::Node;
     const types::Type* type = nullptr;   // filled in by the type checker (M4)
+    /// The value, when the checker computed it at compile time and code generation should use it
+    /// as a constant (compile_time constants, `f.name` in a `for compile_time` loop, ...).
+    std::shared_ptr<const ct::Value> constant;
 };
 
 enum class PatternKind { wildcard, literal, range, binding, enum_alternative, struct_, error };
@@ -310,6 +317,7 @@ struct LambdaExpr : Expr {
 
 struct IfExpr : Expr {
     bool     is_compile_time = false;
+    int      taken = -1;              // `if compile_time`: 0 = then, 1 = else, 2 = neither (set by the checker)
     ExprPtr  condition;
     BlockPtr then_block;
     ExprPtr  else_branch;   // BlockExpr or IfExpr, may be null
@@ -426,6 +434,10 @@ struct WhileExpr : Expr {
 
 /// `for ([mut] T name : iterable) { }`
 struct ForExpr : Expr {
+    bool        is_compile_time = false;   // `for compile_time`: the body is copied per element (spec 26)
+    std::vector<BlockPtr>  copies;          // the checked copies of the body, in order (set by the checker)
+    std::vector<SymbolRef> copy_symbols;    // each copy's loop variable
+    bool        unrolled = false;           // the checker made `copies` (else the body was checked as is)
     bool        is_mut = false;
     TypePtr     type;
     std::string name;
@@ -458,6 +470,8 @@ struct Decl : Node<DeclKind> {
     Access                     access     = Access::none;   // class member section
     bool                       is_template = false;
     std::vector<TemplateParam> template_params;
+    /// The parameters' symbols from the latest resolution of this declaration (name resolution).
+    mutable std::vector<SymbolRef> template_param_symbols;
     using Node::Node;
 };
 

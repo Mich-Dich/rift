@@ -9,6 +9,8 @@ struct holder {
 
 void consume(std::string s) { }
 
+std::option<std::string> find_text() { return std::none; }
+
 void moves(std::string by_value, std::string& by_ref, holder h) {
     std::string local = std::string::from("x");
     consume(move local);
@@ -16,7 +18,7 @@ void moves(std::string by_value, std::string& by_ref, holder h) {
     consume(move by_ref);                    //~ error[E3032]: 'by_ref' is a reference
     consume(move h.text);                    //~ error[E3032]: only local variables
     u32 g = move global;                     //~ error[E3032]: cannot move variable 'global'
-    match (std::option<std::string>::make()) {
+    match (find_text()) {
         std::some(s) => consume(move s),     // match bindings own their value
         std::none => consume(std::string::from("")),
     }

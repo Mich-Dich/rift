@@ -282,7 +282,7 @@ S build_untyped(const Expr& e) {
     }
     case ExprKind::for_: {
         const auto& f = e.as<ForExpr>();
-        std::string head = "for " + f.name + " : " + (f.is_mut ? "mut " : "") + to_string(*f.type);
+        std::string head = std::string(f.is_compile_time ? "for-compile-time " : "for ") + f.name + " : " + (f.is_mut ? "mut " : "") + to_string(*f.type);
         return S{head, {S{"in", {build(*f.iterable)}}, build_block(*f.body)}};
     }
     case ExprKind::return_: {

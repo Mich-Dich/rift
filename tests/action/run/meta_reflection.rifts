@@ -1,0 +1,75 @@
+// RUN: riftc run %s
+// Reflection and compile-time code from spec 26: describe, enum names, field equality,
+// if compile_time on type traits, for compile_time over a range, type values.
+import std;
+
+compile_time u32 square(u32 x) { return x * x; }
+
+compile_time type counter_type(usize max) {
+    return if (max <= 255) { u8 } else { u32 };
+}
+
+compile_time usize max_players = 100;
+compile_time type  player_id   = counter_type(max_players);
+compile_time u32   area        = square(16);
+
+struct point {
+    f64 x;
+    f64 y;
+}
+
+enum color : u8 { red, green, blue }
+
+template<type T>
+void describe(T& value) {
+    std::print(f"{std::type_name<T>()} {{");
+    for compile_time (std::meta::field f : std::meta::fields<T>()) {
+        std::print(f" .{f.name} = {f.get(value)}");
+    }
+    std::println(" }");
+}
+
+template<type E>
+std::static_str name_of(E value) {
+    for compile_time (std::meta::alternative a : std::meta::alternatives<E>()) {
+        if (a.is(value)) {
+            return a.name;
+        }
+    }
+    std::panic("unreachable");
+}
+
+template<type T>
+bool fields_equal(T& a, T& b) {
+    for compile_time (std::meta::field f : std::meta::fields<T>()) {
+        if (f.get(a) != f.get(b)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template<type T>
+std::static_str kind_of() {
+    if compile_time (std::is_integer<T>()) {
+        return "integer";
+    } else if compile_time (std::is_float<T>()) {
+        return "float";
+    } else {
+        return "something else";
+    }
+}
+
+void main() {
+    player_id next = 7;
+    std::println(f"area = {area}, next = {next}, size = {std::size_of<player_id>()}");
+    point p = point{ .x = 1.0, .y = 2.5 };
+    describe(p);
+    std::println(name_of(color::green));
+    point q = point{ .x = 1.0, .y = 2.5 };
+    std::println(f"{fields_equal(p, q)}");
+    std::println(f"{kind_of<u32>()} {kind_of<f64>()} {kind_of<point>()}");
+    for compile_time (usize i : 0..3) {
+        std::println(f"unrolled {i}");
+    }
+}

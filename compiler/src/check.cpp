@@ -1,6 +1,8 @@
 #include "rift/check.hpp"
 
+#include "rift/ast_clone.hpp"
 #include "rift/ast_printer.hpp"
+#include "rift/compile_time.hpp"
 #include "rift/lexer.hpp"
 #include "rift/parser.hpp"
 #include "rift/resolve.hpp"
@@ -9,6 +11,7 @@
 #include <algorithm>
 #include <format>
 #include <functional>
+#include <memory>
 #include <set>
 
 namespace rift {
@@ -196,6 +199,24 @@ public:
         if (program_.entry) check_main(*program_.entry);
     }
 
+    /// Checks one function on demand (a compile_time function that compile-time code calls
+    /// before the normal pass reaches it).
+    void check_function_symbol(const Symbol* s) {
+        const Decl* d = s->definition ? s->definition : s->decl;
+        if (!d || d->kind != DeclKind::function) return;
+        module_ = s->module;
+        if (const auto* subst = sema::substitution_of(s)) subst_ = *subst;
+        Symbol* self = s->parent && s->parent->is_type() ? s->parent : nullptr;
+        check_function(const_cast<FunctionDecl&>(d->as<FunctionDecl>()), self);
+    }
+
+    /// Checks (and evaluates) a global compile_time constant on demand.
+    void check_global_symbol(const Symbol* g) {
+        if (!g->decl) return;
+        module_ = g->module;
+        check_decl(const_cast<Decl&>(*g->decl), nullptr);
+    }
+
     /// Checks the members of a template instance (spec 14): `copy` is the instance's own copy of
     /// the template's declaration, checked with the parameters replaced by their arguments.
     void check_instance(Symbol* inst, Decl& copy) {
@@ -326,6 +347,14 @@ private:
     void mismatch(Span span, const Type* found, const Type* expected, std::string_view what = "") {
         const Type* f = types::strip_ref(found);
         const Type* t = types::strip_ref(expected);
+        if (f && f->is(Kind::type_value) && t && !t->is_unknown()) {
+            Diagnostic& d = error(DiagCode::E3022, span, std::format("expected {}{}, found a type", quoted(expected), what),
+                                  "this is a type, not a value");
+            if (t->is(Kind::user) && (t->symbol->kind == SymbolKind::struct_ || t->symbol->kind == SymbolKind::class_)) {
+                note(d, std::format("construct a value with '{}{{ ... }}'", types::to_string(t)));
+            }
+            return;
+        }
         std::string found_text = found == tc_.untyped_int()     ? "an integer literal"
                                : found == tc_.untyped_float()   ? "a float literal"
                                : found == tc_.untyped_default() ? "'default'"
@@ -348,6 +377,196 @@ private:
         }
     }
 
+    // --- the standard library's core types (spec 08, 11) ------------------------------------
+
+    /// An item of the built-in std module (`option`, `result`, `exit_code`), or null when no
+    /// file imports std.
+    const Symbol* std_item(std::string_view name) const {
+        const Module* m = program_.std_module;
+        if (!m) return nullptr;
+        auto it = m->items.find(std::string(name));
+        return it == m->items.end() ? nullptr : it->second.front();
+    }
+
+    /// Whether `t` (references removed) is an instance of the std template `name`: `std::option<u32>`.
+    static bool is_std_instance(const Type* t, std::string_view name) { return types::is_std_instance(t, name); }
+
+    /// `r?` (spec 11): unwraps `ok`/`some`, or returns the error / `none` from the function.
+    const Type* infer_try(TryExpr& t) {
+        const Type* o = infer(*t.operand);
+        const Type* s = types::strip_ref(o);
+        if (s->is(Kind::pending)) {
+            no_context(*t.operand, "before '?'");
+            return set(t, tc_.error());
+        }
+        if (s->is_unknown() || s->is(Kind::external) || s->is(Kind::never)) return set(t, tc_.error());
+        bool is_result = is_std_instance(s, "result");
+        if (!is_result && !is_std_instance(s, "option")) {
+            if (s->is_untyped()) settle(*t.operand, tc_.error());
+            note(error(DiagCode::E4190, t.span, std::format("'?' needs a std::result or std::option, but this is {}", quoted(o)),
+                       "not a result or option"),
+                 "'?' unwraps 'std::ok(x)' / 'std::some(x)' and returns anything else from the function");
+            return set(t, tc_.error());
+        }
+        const Type* r = fn_.result;
+        if (fn_.in_function && r && !r->is_unknown()) {
+            std::string_view kind = is_result ? "result" : "option";
+            if (!is_std_instance(r, kind)) {
+                Diagnostic& d = error(DiagCode::E4191, t.span,
+                                      std::format("'?' would return from '{}', which returns {}, not a std::{}", fn_.name,
+                                                  quoted(r), kind),
+                                      std::format("returns the {} early", is_result ? "error" : "'none'"));
+                note(d, std::format("'?' on a std::{0} works only in functions that return std::{0}; use 'match' or "
+                                    "'.value_or(...)' here",
+                                    kind));
+            } else if (is_result && types::strip_ref(r)->symbol->template_args[1] != s->symbol->template_args[1]) {
+                const Type* want = types::strip_ref(r)->symbol->template_args[1];
+                const Type* have = s->symbol->template_args[1];
+                Diagnostic& d = error(DiagCode::E4191, t.span,
+                                      std::format("'?' would return the error {}, but '{}' returns errors of type {}",
+                                                  quoted(have), fn_.name, quoted(want)),
+                                      "different error type");
+                note(d, std::format("there is no implicit error conversion; convert it with '.or_error(...)' or "
+                                    "'.map_error(...)' before '?'"));
+            }
+        }
+        return set(t, s->symbol->template_args[0]);
+    }
+
+    /// `value_or`, `expect`, `or_error`, `map_error` on std::option / std::result (spec 11). They
+    /// consume the receiver.
+    const Type* infer_std_method(CallExpr& c, const Type* t, const std::string& name, std::vector<Expr*>& args) {
+        c.callee->type     = tc_.error();
+        const Type* value  = t->symbol->template_args[0];
+        if (args.size() != 1) {
+            error(DiagCode::E4030, c.span, std::format("'{}' takes 1 argument, but {} {} given", name, args.size(),
+                                                       args.size() == 1 ? "is" : "are"),
+                  "wrong number of arguments");
+            for (Expr* a : args) {
+                if (a->type && a->type->is_untyped()) settle(*a, tc_.error());
+            }
+            return set(c, name == "or_error" || name == "map_error" ? tc_.error() : value);
+        }
+        Expr& a = *args[0];
+        if (name == "value_or") {
+            coerce(a, value);
+            return set(c, value);
+        }
+        if (name == "expect") {
+            const Type* m = types::strip_ref(a.type);
+            if (m->is_untyped()) {
+                mismatch(a.span, a.type, tc_.static_str(), " (the message)");
+                settle(a, tc_.error());
+            } else if (!m->is_unknown() && !m->is(Kind::static_str) &&
+                       !(m->is(Kind::external) && (m->name == "std::str" || m->name == "std::format_args"))) {
+                mismatch(a.span, a.type, tc_.static_str(), " (the message)");
+            }
+            return set(c, value);
+        }
+        if (name == "or_error") {
+            const Type* e = types::strip_ref(a.type);
+            if (e->is_untyped()) {
+                no_context(a, "as the new error ('or_error' takes the error type from its argument)");
+                return set(c, tc_.error());
+            }
+            if (e->is_unknown() || e->is(Kind::never) || e->is(Kind::external)) return set(c, tc_.error());
+            const Symbol* result = std_item("result");
+            return set(c, result ? tc_.instance(result, {value, e}) : tc_.error());
+        }
+        return set(c, tc_.error());   // map_error: the new error type comes from a function value (not typed yet)
+    }
+
+    /// `std::some`, `std::none`, `std::ok`, `std::error` written without template arguments: the
+    /// alternatives std exports directly, whose arguments come from context (spec 08).
+    static bool is_std_export(const PathExpr& pe) {
+        const Symbol* s = pe.symbol;
+        return s && s->kind == SymbolKind::alternative && pe.path.segments.size() == 2 &&
+               pe.path.segments[0].name == "std" && pe.path.segments[1].template_args.empty() && s->parent &&
+               s->parent->decl && s->parent->decl->is_template && !s->parent->template_of;
+    }
+
+    /// Index of the template parameter that the payload of `alt` is (`some(T)` -> T), or -1.
+    static int payload_param(const Symbol* alt) {
+        const TypeExpr* p = alt->alternative->payload.get();
+        if (!p || p->kind != TypeKind::named) return -1;
+        const auto& nt = p->as<NamedType>();
+        if (nt.path.segments.size() != 1) return -1;
+        const auto& params = alt->parent->decl->template_params;
+        for (std::size_t i = 0; i < params.size(); ++i) {
+            if (params[i].name == nt.path.segments[0].name) return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    /// The type of `std::ok(x)` / `std::none`: the instance when the payload fixes every
+    /// template argument, otherwise a pending type that context completes later.
+    const Type* std_alternative_type(PathExpr& pe, Expr* payload) {
+        const Symbol*            alt   = pe.symbol;
+        const Symbol*            templ = alt->parent;
+        std::vector<const Type*> args(templ->decl->template_params.size(), nullptr);
+        if (payload) {
+            const Type* at = types::strip_ref(payload->type);
+            if (at->is_unknown()) return tc_.error();
+            int i = payload_param(alt);
+            if (i >= 0 && !at->is_untyped() && !at->is(Kind::never)) args[static_cast<std::size_t>(i)] = at;
+        }
+        for (const Type* a : args) {
+            if (!a) return tc_.pending(templ, args);
+        }
+        const Type* et = tc_.instance(templ, args);
+        pe.symbol      = instance_alternative(pe.symbol, et);
+        return et;
+    }
+
+    /// A pending `std::ok(x)` / `std::none` meets the type `t` it is used as.
+    void settle_pending(Expr& e, const Type* t) {
+        const Type* p       = e.type;
+        auto&       pe      = e.kind == ExprKind::call ? e.as<CallExpr>().callee->as<PathExpr>() : e.as<PathExpr>();
+        Expr*       payload = e.kind == ExprKind::call && e.as<CallExpr>().args.size() == 1
+                                  ? e.as<CallExpr>().args[0].get() : nullptr;
+        if (t->is_unknown() || t->is(Kind::external)) {
+            e.type = pe.type = t;
+            if (payload && payload->type && payload->type->is_untyped()) settle(*payload, tc_.error());
+            return;
+        }
+        bool fits = t->is(Kind::user) && t->symbol->template_of == p->symbol &&
+                    t->symbol->template_args.size() == p->args.size();
+        for (std::size_t i = 0; fits && i < p->args.size(); ++i) {
+            fits = !p->args[i] || p->args[i] == t->symbol->template_args[i];
+        }
+        if (!fits) {
+            mismatch(e.span, p, t);
+            e.type = pe.type = tc_.error();
+            if (payload && payload->type && payload->type->is_untyped()) settle(*payload, tc_.error());
+            return;
+        }
+        pe.symbol = instance_alternative(pe.symbol, t);
+        e.type = pe.type = t;
+        if (payload && pe.symbol->alternative->payload) {
+            coerce(*payload, lower_owned(pe.symbol, *pe.symbol->alternative->payload));
+        }
+    }
+
+    void no_context_pending(Expr& e, std::string_view where) {
+        const Type*  p     = e.type;
+        const auto&  tps   = p->symbol->decl->template_params;
+        std::string  unknown;
+        int          count = 0;
+        for (std::size_t i = 0; i < tps.size(); ++i) {
+            if (p->args[i]) continue;
+            unknown += (unknown.empty() ? "'" : ", '") + tps[i].name + "'";
+            ++count;
+        }
+        const Expr& callee = e.kind == ExprKind::call ? *e.as<CallExpr>().callee : e;
+        std::string what   = ast::to_string(callee.as<PathExpr>().path) + (e.kind == ExprKind::call ? "(...)" : "");
+        Diagnostic& d = error(DiagCode::E4001, e.span, std::format("'{}' has no type {}", what, where), "type unknown");
+        note(d, std::format("the template argument{} {} of 'std::{}' must come from context; write the type, as in "
+                            "'std::{}<{}> x = {};'",
+                            count == 1 ? "" : "s", unknown, p->symbol->name, p->symbol->name,
+                            p->symbol->name == "result" ? "T, E" : "T", what));
+        e.type = tc_.error();
+    }
+
     // --- untyped values -------------------------------------------------------------------
 
     /// Gives an untyped value (literal, `bit(n)`, `default`, or arithmetic on those) the type
@@ -355,6 +574,10 @@ private:
     void settle(Expr& e, const Type* target, bool negative = false) {
         const Type* t = types::strip_ref(target);
         if (t->is_untyped()) return;   // still no context: leave it untyped
+        if (e.type && e.type->is(Kind::pending) && (e.kind == ExprKind::call || e.kind == ExprKind::path)) {
+            settle_pending(e, t);
+            return;
+        }
         if (t->is_unknown() || t->is(Kind::external)) {
             e.type = t;
             return;
@@ -483,6 +706,10 @@ private:
 
     /// An untyped value in a place without any context (`auto x = 5;`, `if (3 < 4)`).
     void no_context(Expr& e, std::string_view where) {
+        if (e.type && e.type->is(Kind::pending)) {
+            no_context_pending(e, where);
+            return;
+        }
         std::string what = e.type == tc_.untyped_default() ? "'default'"
                          : e.kind == ExprKind::bit          ? "'bit(n)'"
                          : e.type == tc_.untyped_float()    ? "this float literal"
@@ -536,13 +763,32 @@ private:
         case DeclKind::variable:
         case DeclKind::field: {
             auto& v = d.as<VariableDecl>();
-            if (!v.init) return;
+            if (!v.init) {
+                if (d.kind == DeclKind::field && compile_time_only(lower(*v.type))) {
+                    run_time_use(v.type->span, lower(*v.type), std::format("'{}' is a field", v.name),
+                                 "values of a struct or class exist at run time");
+                }
+                return;
+            }
+            if (!begin_check(&d)) return;
+            std::size_t   errors = diags_.error_count();
             FunctionState saved = fn_;
             fn_                 = FunctionState{};
             fn_.is_compile_time = v.storage != Storage::local;   // static/compile_time initializers run at compile time
             infer(*v.init);
-            coerce(*v.init, lower(*v.type));
+            const Type* declared = lower(*v.type);
+            coerce(*v.init, declared);
             fn_ = saved;
+            if (d.kind == DeclKind::variable && v.storage == Storage::compile_time) {
+                if (Symbol* g = symbol_for(d); g && diags_.error_count() == errors) {
+                    g->ct_value = evaluate(*v.init, std::format("the value of compile_time constant '{}' is computed at compile time", v.name));
+                }
+            } else if (compile_time_only(declared)) {
+                run_time_use(v.type->span, declared,
+                             std::format("'{}' is {}", v.name, d.kind == DeclKind::field ? "a field" : "a static variable"),
+                             "declare it 'compile_time'");
+            }
+            end_check(&d);
             return;
         }
         case DeclKind::struct_:
@@ -583,6 +829,7 @@ private:
 
     void check_function(FunctionDecl& fn, Symbol* self) {
         if (!fn.body) return;
+        if (!begin_check(&fn)) return;   // checked already (on demand, for compile-time code)
         FunctionState saved   = fn_;
         int           unsafe0 = unsafe_depth_;
         fn_                   = FunctionState{};
@@ -617,6 +864,82 @@ private:
         }
         unsafe_depth_ = unsafe0;
         fn_           = saved;
+        end_check(&fn);
+        if (!fn.is_compile_time) {
+            for (Param& p : fn.params) {
+                const Type* pt = p.symbol ? p.symbol->type : nullptr;
+                if (pt && compile_time_only(pt)) {
+                    run_time_use(p.type->span, pt, std::format("'{}' is a run-time function", fn.name),
+                                 "make the function 'compile_time', or pass the type as a template parameter");
+                }
+            }
+            if (fn.result && compile_time_only(lower(*fn.result))) {
+                run_time_use(fn.result->span, lower(*fn.result), std::format("'{}' is a run-time function", fn.name),
+                             "make the function 'compile_time'");
+            }
+        }
+    }
+
+    // --- compile time (spec 15, 26) -------------------------------------------------------
+
+    /// Types whose values exist only at compile time: `type`, std::meta data, lists of them.
+    bool compile_time_only(const Type* t) const {
+        t = types::strip_ref(t);
+        if (!t) return false;
+        if (t->is_compile_time_only()) return true;
+        if (t->is(Kind::external)) {
+            if (const auto* args = tc_.external_args(t)) {
+                for (const Type* a : *args) {
+                    if (a && compile_time_only(a)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void run_time_use(Span span, const Type* t, std::string where, std::string fix) {
+        Diagnostic& d = error(DiagCode::E4202, span, std::format("{} exists only at compile time, but {}", quoted(t), where),
+                              "compile-time only");
+        note(d, std::move(fix));
+    }
+
+    ct::Evaluator& evaluator() {
+        if (!evaluator_) {
+            ct::Hooks h;
+            h.check_function = [this](const Symbol* f) { return ensure_function(f); };
+            h.constant_value = [this](const Symbol* c) -> std::shared_ptr<const ct::Value> {
+                if (c->ct_value) return c->ct_value;
+                return c->kind == SymbolKind::global ? ensure_constant(c) : nullptr;
+            };
+            h.lower      = [this](const TypeExpr& t) { return lower(t); };
+            h.depends_on_template = [this](const Symbol* s) { return unknown_values_.count(s) > 0; };
+            h.substitute = [this](const Symbol* param) -> const Type* {
+                auto it = subst_.find(param);
+                return it == subst_.end() ? nullptr : it->second;
+            };
+            h.visible_fields = [this](const Type* t) {
+                std::vector<const Symbol*> out;
+                for (const Symbol* f : t->symbol->member_order) {
+                    if (f->kind == SymbolKind::field && !f->is_static && member_visible(f)) out.push_back(f);
+                }
+                return out;
+            };
+            evaluator_ = std::make_unique<ct::Evaluator>(program_, diags_, std::move(h));
+        }
+        return *evaluator_;
+    }
+
+    /// Evaluates a checked expression at compile time; null when it cannot be (reported, or it
+    /// depends on a template parameter, see `evaluator().unknown()`).
+    std::shared_ptr<const ct::Value> evaluate(Expr& e, std::string_view why) {
+        if (!e.type || e.type->is_unknown()) return nullptr;
+        return evaluator().evaluate(e, why);
+    }
+
+    /// The type a type value denotes, when the expression is one (`u32`, `point`, `T`).
+    const Type* denoted_type(const Expr& e) const {
+        if (!e.constant || e.constant->kind != ct::Value::Kind::type) return nullptr;
+        return e.constant->type_value;
     }
 
     void check_main(Module& m) {
@@ -626,7 +949,8 @@ private:
             auto&       fn = d->as<FunctionDecl>();
             const Type* r  = fn.result ? lower(*fn.result) : tc_.void_();
             bool ok_result = r->is(Kind::void_) || r->is_integer() || r->is_unknown() ||
-                             (r->is(Kind::external) && r->name == "std::exit_code");
+                             (r->is(Kind::external) && r->name == "std::exit_code") ||
+                             (r->is(Kind::user) && r->symbol == std_item("exit_code"));
             if (!ok_result) {
                 note(error(DiagCode::E4110, fn.result->span, std::format("main cannot return {}", quoted(r)),
                            "invalid return type"),
@@ -666,6 +990,7 @@ private:
             auto& v = s.as<VariableStmt>();
             bool  is_auto = v.type->kind == TypeKind::auto_;
             const Type* declared = is_auto ? nullptr : lower(*v.type);
+            std::size_t errors   = diags_.error_count();
             if (v.init) {
                 bool saved_ct = fn_.is_compile_time;
                 if (v.storage == Storage::compile_time) fn_.is_compile_time = true;
@@ -687,14 +1012,31 @@ private:
                 }
             }
             if (v.symbol) set_local(v.symbol, declared ? declared : tc_.error());
+            if (v.storage == Storage::compile_time && v.init && v.symbol && diags_.error_count() == errors) {
+                v.symbol->ct_value =
+                    evaluate(*v.init, std::format("the value of compile_time constant '{}' is computed at compile time", v.name));
+                if (!v.symbol->ct_value && evaluator().unknown()) unknown_values_.insert(v.symbol);
+            } else if (declared && compile_time_only(declared) && !fn_.is_compile_time) {
+                run_time_use(v.type->span, declared, std::format("'{}' is a run-time variable", v.name),
+                             std::format("declare it 'compile_time {} {} = ...;'", types::to_string(declared), v.name));
+            }
             return;
         }
         case StmtKind::assign: check_assign(s.as<AssignStmt>()); return;
-        case StmtKind::discard: infer(*s.as<DiscardStmt>().value); return;
+        case StmtKind::discard: {
+            Expr& v = *s.as<DiscardStmt>().value;
+            if (infer(v)->is(Kind::pending)) no_context(v, "here ('_ =' needs a value whose type is known)");
+            return;
+        }
         case StmtKind::expression: {
             Expr&       e = *s.as<ExprStmt>().expr;
             const Type* t = infer(e);
-            if ((e.kind == ExprKind::call) && t->is(Kind::external) && t->external_base() == "std::result") {
+            if (t->is(Kind::pending)) {
+                no_context(e, "here");
+                return;
+            }
+            if ((e.kind == ExprKind::call) && (is_std_instance(t, "result") ||
+                                                (t->is(Kind::external) && t->external_base() == "std::result"))) {
                 Diagnostic& d = error(DiagCode::E4150, e.span, std::format("the {} returned here is ignored", quoted(t)),
                                       "result not used");
                 note(d, "handle it with 'match' or '?', or discard it explicitly with '_ = ...;'");
@@ -735,6 +1077,17 @@ private:
     Place place_of(const Expr& e) {
         Place p;
         switch (e.kind) {
+        case ExprKind::call: {   // `f.get(mut value)`: a reference to a field (spec 26)
+            const Type* t = e.type;
+            if (!t || t->is_unknown()) {
+                p.is_place = p.is_mutable = true;   // unknown (the generic check of a template): don't complain
+            } else if (t->is(Kind::reference)) {
+                p.is_place   = true;
+                p.is_mutable = t->is_mut;
+                p.name       = "the field";
+            }
+            return p;
+        }
         case ExprKind::path: {
             const Symbol* s = e.as<PathExpr>().symbol;
             if (!s) {
@@ -903,7 +1256,7 @@ private:
             return set(e, infer_index(i));
         }
         case ExprKind::member: return infer_member(e.as<MemberExpr>());
-        case ExprKind::try_: infer(*e.as<TryExpr>().operand); return set(e, tc_.error());
+        case ExprKind::try_: return infer_try(e.as<TryExpr>());
         case ExprKind::cast: return infer_cast(e.as<CastExpr>());
         case ExprKind::bit: return infer_bit(e.as<BitExpr>());
         case ExprKind::struct_literal: return infer_struct_literal(e.as<StructLiteralExpr>());
@@ -966,12 +1319,35 @@ private:
 
     const Type* infer_path(PathExpr& pe) {
         const Symbol* s = pe.symbol;
-        if (!s) return set(pe, tc_.error());
+        if (!s) {
+            // `u32` used as a type value (spec 26).
+            if (pe.path.segments.size() == 1) {
+                if (const Type* b = tc_.builtin(pe.path.segments[0].name)) {
+                    pe.constant = std::make_shared<const ct::Value>(ct::Value::of_type(b, tc_.type_value()));
+                    return set(pe, tc_.type_value());
+                }
+            }
+            return set(pe, tc_.error());
+        }
         if (s->kind == SymbolKind::global) check_static_mut_access(*s, pe.span);
+        if (s->is_type()) {   // a type used as a value: `point`, `T`, `box<u32>` (spec 26)
+            pe.constant = evaluate(pe, "");
+            return set(pe, tc_.type_value());
+        }
         switch (s->kind) {
         case SymbolKind::local:
-        case SymbolKind::global: return set(pe, type_of_symbol(s));
+        case SymbolKind::global: {
+            const Type* t = type_of_symbol(s);
+            if (s->kind == SymbolKind::global && s->decl && s->decl->kind == DeclKind::variable &&
+                s->decl->as<VariableDecl>().storage == Storage::compile_time) {
+                pe.constant = s->ct_value ? s->ct_value : ensure_constant(s);
+            } else if (s->ct_value) {
+                pe.constant = s->ct_value;   // a compile_time local or a `for compile_time` loop variable
+            }
+            return set(pe, t);
+        }
         case SymbolKind::alternative: {
+            if (is_std_export(pe)) return set(pe, std_alternative_type(pe, nullptr));
             const Type* et = enum_type_of(s, pe.path);
             pe.symbol      = instance_alternative(pe.symbol, et);
             return set(pe, et);
@@ -1307,6 +1683,8 @@ private:
             } else {
                 return set(m, tc_.error());   // smart pointers are library types
             }
+        } else if (t->is(Kind::meta)) {
+            return infer_meta_member(m, t, name);
         } else if (t->is(Kind::pointer)) {
             if (name != "offset") {
                 note(error(DiagCode::E4074, m.span, "use '->' to access members through a raw pointer", "use '->'"),
@@ -1340,6 +1718,117 @@ private:
         }
         if (mem->kind != SymbolKind::field) return set(m, tc_.error());
         return set(m, lower_owned(mem, *mem->decl->as<VariableDecl>().type));
+    }
+
+    // --- reflection (spec 26) -------------------------------------------------------------
+
+    /// `std::is_integer<T>()`, `std::size_of<T>()`, `std::meta::fields<T>()`, ...: compile-time
+    /// functions of the compiler. Their value is computed here, so run-time code gets a constant.
+    const Type* infer_builtin(CallExpr& c, const std::string& name) {
+        auto&       seg   = c.callee->as<PathExpr>().path.segments.back();
+        std::size_t wants = name == "is_same" ? 2 : 1;
+        if (seg.template_args.size() != wants || !c.args.empty()) {
+            error(DiagCode::E4030, c.span,
+                  std::format("'{}' takes {} template argument{} and no arguments: '{}<{}>()'", ast::to_string(c.callee->as<PathExpr>().path),
+                              wants, wants == 1 ? "" : "s", ast::to_string(c.callee->as<PathExpr>().path), wants == 1 ? "T" : "A, B"),
+                  "wrong arguments");
+            return set(c, tc_.error());
+        }
+        for (const TemplateArg& a : seg.template_args) {
+            if (a.type) lower(*a.type);
+        }
+        const Type* t = name == "size_of" || name == "align_of"   ? tc_.builtin("usize")
+                      : name == "type_name"                       ? tc_.static_str()
+                      : name == "meta::fields"                    ? list_of(tc_.meta_field())
+                      : name == "meta::alternatives"              ? list_of(tc_.meta_alternative())
+                                                                  : tc_.bool_();
+        set(c, t);
+        c.constant = evaluate(c, "");
+        return t;
+    }
+
+    /// `std::span<T>` of compile-time data: the result of `std::meta::fields<T>()`.
+    const Type* list_of(const Type* element) {
+        std::string spelling = "std::span<" + types::to_string(element) + ">";
+        const Type* t        = tc_.external(spelling);
+        if (!tc_.external_args(t)) tc_.set_external_args(t, {element});
+        return t;
+    }
+
+    /// `f.name`, `a.payload`, ...: the parts of std::meta::field / std::meta::alternative.
+    const Type* infer_meta_member(MemberExpr& m, const Type* t, const std::string& name) {
+        bool        field = t == tc_.meta_field();
+        const Type* r     = name == "name"                                  ? tc_.static_str()
+                          : name == "index" || (field && name == "offset") ? tc_.builtin("usize")
+                          : field && name == "type"                         ? tc_.type_value()
+                          : !field && name == "payload"                     ? tc_.type_value()
+                          : !field && name == "has_payload"                 ? tc_.bool_()
+                                                                            : nullptr;
+        if (!r) {
+            error(DiagCode::E4070, m.name.span, std::format("{} has no field '{}'", quoted(t), name), "unknown member");
+            return set(m, tc_.error());
+        }
+        set(m, r);
+        if (m.object->constant) m.constant = evaluate(m, "");
+        return r;
+    }
+
+    /// `f.get(value)`, `a.is(value)`, `a.get(value)`, `a.make(...)` (spec 26). The handle must be
+    /// a compile-time value: what the call does depends on which field or alternative it is.
+    const Type* infer_meta_method(CallExpr& c, MemberExpr& me, const Type* t, const std::string& name, std::vector<Expr*>& args) {
+        c.callee->type = tc_.error();
+        bool field     = t == tc_.meta_field();
+        bool known     = field ? name == "get" : name == "is" || name == "get" || name == "make";
+        if (!known) {
+            error(DiagCode::E4070, me.name.span, std::format("{} has no method '{}'", quoted(t), name), "unknown method");
+            return set(c, tc_.error());
+        }
+        const ct::Value* handle = me.object->constant.get();
+        if (!handle) {
+            if (evaluator().unknown() || types::strip_ref(me.object->type)->is_unknown()) return set(c, tc_.error());
+            Diagnostic& d = error(DiagCode::E4200, me.object->span,
+                                  std::format("'.{}' needs a {} that is known at compile time", name, quoted(t)),
+                                  "not known at compile time");
+            note(d, "use the loop variable of a 'for compile_time' loop, or a 'compile_time' constant");
+            return set(c, tc_.error());
+        }
+        const Type* owner = handle->type_value;
+        if (name == "make") {
+            const Symbol* alt = handle->symbol;
+            if (alt->alternative->payload) {
+                if (args.size() != 1) {
+                    error(DiagCode::E4030, c.span, std::format("'{}' carries one value: 'a.make(value)'", alt->name), "wrong number of values");
+                    return set(c, owner);
+                }
+                coerce(*args[0], lower_owned(alt, *alt->alternative->payload));
+            } else if (!args.empty()) {
+                error(DiagCode::E4030, c.span, std::format("'{}' carries no value: 'a.make()'", alt->name), "wrong number of values");
+            }
+            return set(c, owner);
+        }
+        if (args.size() != 1) {
+            error(DiagCode::E4030, c.span, std::format("'{}' takes the value as its one argument", name), "wrong number of arguments");
+            return set(c, tc_.error());
+        }
+        Expr& arg    = *args[0];
+        bool  marked = arg.kind == ExprKind::unary && arg.as<UnaryExpr>().op == UnaryOp::mut_marker;
+        const Type* at = types::strip_ref(arg.type);
+        if (at->is_untyped()) settle(arg, owner);
+        else if (!at->is_unknown() && at != owner) mismatch(arg.span, arg.type, owner, " (the reflected value)");
+        if (field) {
+            if (marked) require_mutable(place_of(*arg.as<UnaryExpr>().operand), *arg.as<UnaryExpr>().operand, "change a field of");
+            const Symbol* f = handle->symbol;
+            return set(c, tc_.reference(lower_owned(f, *f->decl->as<VariableDecl>().type), marked));
+        }
+        if (name == "is") return set(c, tc_.bool_());
+        const Symbol* alt = handle->symbol;   // a.get(value): std::option<P&>
+        if (!alt->alternative->payload) {
+            error(DiagCode::E4070, me.name.span, std::format("'{}' has no payload; use 'a.is(value)'", alt->name), "no payload");
+            return set(c, tc_.error());
+        }
+        const Symbol* option = std_item("option");
+        if (!option) return set(c, tc_.error());
+        return set(c, tc_.instance(option, {tc_.reference(lower_owned(alt, *alt->alternative->payload), false)}));
     }
 
     // --- calls ----------------------------------------------------------------------------
@@ -1386,6 +1875,10 @@ private:
         };
         for (const Param& p : f.params) scan(*p.type);
         if (f.result) scan(*f.result);
+        // A parameter that only the body uses (`std::is_integer<T>()`): its own symbol.
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            if (!out[i] && i < f.template_param_symbols.size()) out[i] = f.template_param_symbols[i];
+        }
         return out;
     }
 
@@ -1602,6 +2095,16 @@ private:
         if (callee.kind == ExprKind::path) {
             auto&   pe = callee.as<PathExpr>();
             Symbol* s  = pe.symbol;
+            if (std::string b = ct::builtin_name(c); !b.empty()) return infer_builtin(c, b);
+            if (s && s->is_type()) {
+                Diagnostic& d = error(DiagCode::E3022, callee.span,
+                                      std::format("'{}' is a {}, not a function", ast::to_string(pe.path), sema::to_string(s->kind)),
+                                      "not a function");
+                if (s->kind == SymbolKind::struct_ || s->kind == SymbolKind::class_) {
+                    note(d, std::format("construct a value with '{}{{ ... }}'", ast::to_string(pe.path)));
+                }
+                return set(c, tc_.error());
+            }
             if (!s) {
                 if (!pe.path.segments.empty() && pe.path.segments[0].name == "std" &&
                     pe.path.segments.back().name == "panic") {
@@ -1611,6 +2114,23 @@ private:
                     if (a->type && a->type->is_untyped() && a->type != tc_.untyped_default()) settle(*a, tc_.error());
                 }
                 return set(c, tc_.error());   // std::... and unresolved names
+            }
+            if (s->kind == SymbolKind::alternative && is_std_export(pe)) {
+                if (!s->alternative->payload || args.size() != 1) {
+                    error(DiagCode::E4030, c.span,
+                          s->alternative->payload
+                              ? std::format("'{}' carries exactly one value, but {} are given", ast::to_string(pe.path), args.size())
+                              : std::format("'{}' carries no value", ast::to_string(pe.path)),
+                          "wrong number of values");
+                    for (Expr* a : args) {
+                        if (a->type && a->type->is_untyped()) settle(*a, tc_.error());
+                    }
+                    return set(c, tc_.error());
+                }
+                const Type* t = std_alternative_type(pe, args[0]);
+                callee.type   = t;
+                if (t->is(Kind::user)) check_argument(*args[0], lower_owned(pe.symbol, *pe.symbol->alternative->payload));
+                return set(c, t);
             }
             if (s->kind == SymbolKind::alternative) {
                 const Type* et      = enum_type_of(s, pe.path);
@@ -1663,6 +2183,15 @@ private:
             const Type* objt = infer(*me.object);
             const Type* t    = types::strip_ref(objt);
             std::string name = me.name.segments.back().name;
+            if (t->is(Kind::pending)) {
+                no_context(*me.object, std::format("before '.{}'", name));
+                for (Expr* a : args) {
+                    if (a->type && a->type->is_untyped()) settle(*a, tc_.error());
+                }
+                return set(c, tc_.error());
+            }
+            if (types::is_std_builtin_method(t, name)) return infer_std_method(c, t, name, args);
+            if (t->is(Kind::meta)) return infer_meta_method(c, me, t, name, args);
             if (t->is(Kind::pointer) && !me.arrow) {
                 if (name == "offset") require_unsafe(c.span, "pointer arithmetic");
                 for (Expr* a : args) {
@@ -1702,6 +2231,15 @@ private:
                 if (args.empty() && (t->is(Kind::static_str) || (t->is(Kind::external) && t->name == "std::str"))) {
                     if (name == "len") return set(c, tc_.builtin("usize"));
                     if (name == "is_empty") return set(c, tc_.bool_());
+                }
+                // Lists of compile-time data (`std::meta::fields<T>().len()`).
+                if (args.empty() && t->is(Kind::external) && t->external_base() == "std::span" && compile_time_only(t)) {
+                    const Type* r = name == "len" ? tc_.builtin("usize") : name == "is_empty" ? tc_.bool_() : nullptr;
+                    if (r) {
+                        set(c, r);
+                        if (me.object->constant) c.constant = evaluate(c, "");
+                        return r;
+                    }
                 }
                 return set(c, tc_.error());
             }
@@ -1787,7 +2325,10 @@ private:
             if (from->is_untyped()) settle(*c.operand, to);
             return to;
         }
-        if (v == "checked" || v == "dynamic") {
+        if (v == "checked") {
+            const Symbol* option = std_item("option");
+            set(c, option ? tc_.instance(option, {to}) : tc_.external("std::option<" + types::to_string(to) + ">"));
+        } else if (v == "dynamic") {
             set(c, tc_.external("std::option<" + types::to_string(to) + ">"));
         } else if (!v.empty() && v != "truncate" && v != "saturate" && v != "round") {
             error(DiagCode::E4092, c.span, std::format("unknown cast 'cast::{}'", v), "unknown cast")
@@ -1863,6 +2404,7 @@ private:
         }
         if (!s->is(Kind::user)) return;
         const Symbol* sym = s->symbol;
+        if (is_std_instance(s, "option")) return;   // std::none (spec 03)
         if (sym->kind == SymbolKind::enum_ || sym->kind == SymbolKind::interface) {
             error(DiagCode::E4140, span, std::format("{} '{}' has no default value", sema::to_string(sym->kind), sym->name),
                   "no default");
@@ -1949,6 +2491,11 @@ private:
             const Type* ts = types::strip_ref(t);
             if (rs == ts) continue;
             if (rs->is_unknown() || ts->is_unknown()) return tc_.error();
+            if (rs->is(Kind::pending) && ts->is(Kind::pending) && rs->symbol == ts->symbol) {
+                result = merge_pending(rs, ts);   // `if (c) { std::ok(1u32) } else { std::error(e) }`
+                if (result->is(Kind::error)) return result;
+                continue;
+            }
             if (rs->is_untyped() && ts->is_untyped()) {
                 if (rs != ts) return tc_.error();
                 continue;
@@ -1963,7 +2510,49 @@ private:
         return result ? result : tc_.never();
     }
 
+    /// `if compile_time (c)` (spec 15): the branch that is not taken is not checked. Nullopt when
+    /// the condition depends on a template parameter (the generic check): then both are checked.
+    std::optional<const Type*> infer_if_compile_time(IfExpr& i) {
+        const Type* ct = types::strip_ref(infer(*i.condition));
+        if (ct->is_untyped()) settle(*i.condition, tc_.bool_());
+        else if (!ct->is(Kind::bool_) && !ct->is_unknown()) mismatch(i.condition->span, i.condition->type, tc_.bool_(), " (the condition)");
+        std::shared_ptr<const ct::Value> v = evaluate(*i.condition, "the condition of 'if compile_time' must be known at compile time");
+        if (!v || v->kind != ct::Value::Kind::boolean) {
+            if (!v && !evaluator().unknown() && !ct->is_unknown()) {
+                set(i, tc_.error());
+                return tc_.error();   // reported
+            }
+            return std::nullopt;
+        }
+        if (v->boolean) {
+            i.taken = 0;
+            return set(i, i.else_branch ? infer_block(*i.then_block) : (infer_block(*i.then_block), tc_.void_()));
+        }
+        if (!i.else_branch) {
+            i.taken = 2;
+            return set(i, tc_.void_());
+        }
+        i.taken = 1;
+        return set(i, infer(*i.else_branch));
+    }
+
+    /// Two pending values of the same template: the arguments either knows. Error on a conflict.
+    const Type* merge_pending(const Type* a, const Type* b) {
+        std::vector<const Type*> args = a->args;
+        for (std::size_t i = 0; i < args.size(); ++i) {
+            if (!args[i]) args[i] = b->args[i];
+            else if (b->args[i] && b->args[i] != args[i]) return tc_.error();
+        }
+        for (const Type* x : args) {
+            if (!x) return tc_.pending(a->symbol, args);
+        }
+        return tc_.instance(a->symbol, args);
+    }
+
     const Type* infer_if(IfExpr& i) {
+        if (i.is_compile_time) {
+            if (std::optional<const Type*> t = infer_if_compile_time(i)) return *t;
+        }
         check_condition(*i.condition, "if");
         infer_block(*i.then_block);
         if (!i.else_branch) return set(i, tc_.void_());
@@ -2022,6 +2611,9 @@ private:
     }
 
     const Type* infer_for(ForExpr& f) {
+        if (f.is_compile_time) {
+            if (infer_for_compile_time(f)) return set(f, tc_.void_());
+        }
         const Type* it   = infer(*f.iterable);
         const Type* var  = lower(*f.type);
         const Type* sit  = types::strip_ref(it);
@@ -2043,6 +2635,65 @@ private:
         }
         infer_block(*f.body);
         return set(f, tc_.void_());
+    }
+
+    /// `for compile_time` (spec 26): the body is copied once per element and each copy is
+    /// checked with the loop variable as a compile-time constant. False when the elements depend
+    /// on a template parameter (the generic check): then the body is checked once as usual.
+    bool infer_for_compile_time(ForExpr& f) {
+        std::size_t errors = diags_.error_count();
+        const Type* it     = infer(*f.iterable);
+        if (diags_.error_count() != errors) return true;   // reported (e.g. std::meta::fields of a non-struct)
+        const Type* var = lower(*f.type);
+        if (f.iterable->kind == ExprKind::range) {
+            auto& r = f.iterable->as<RangeExpr>();
+            if (r.lo->type && r.lo->type->is_untyped()) settle(*r.lo, var);
+            if (r.hi->type && r.hi->type->is_untyped()) settle(*r.hi, var);
+            f.iterable->type = tc_.range(types::strip_ref(var));
+        } else if (types::strip_ref(it)->is_unknown()) {
+            if (f.symbol) unknown_values_.insert(f.symbol);
+            return false;
+        }
+        std::optional<std::vector<ct::Value>> items = evaluator().elements(*f.iterable);
+        if (!items) {
+            if (evaluator().unknown()) {
+                if (f.symbol) unknown_values_.insert(f.symbol);   // the generic check of a template
+                return false;
+            }
+            return true;   // reported
+        }
+        for (const ct::Value& item : *items) {
+            if (item.type && !var->is_unknown() && types::strip_ref(item.type) != types::strip_ref(var)) {
+                mismatch(f.type->span, var, item.type, " (the loop's elements)");
+                return true;
+            }
+        }
+        Module* home = module_;
+        f.unrolled   = true;
+        for (const ct::Value& item : *items) {
+            Cloner cloner([home](const Symbol& original) {
+                Symbol* copy = home->make(original.kind, original.name, original.span);
+                Module* owner = copy->module;
+                *copy         = original;
+                copy->module  = owner;
+                copy->ct_value.reset();
+                copy->type = nullptr;
+                return copy;
+            });
+            Symbol* loop_var = home->make(SymbolKind::local, f.name, f.name_span);
+            if (f.symbol) {
+                Module* owner = loop_var->module;
+                *loop_var     = *f.symbol;
+                loop_var->module = owner;
+                cloner.map(f.symbol, loop_var);
+            }
+            loop_var->ct_value = std::make_shared<const ct::Value>(item);
+            set_local(loop_var, var);
+            f.copies.push_back(cloner.block(*f.body));
+            f.copy_symbols.push_back(loop_var);
+            infer_block(*f.copies.back());
+        }
+        return true;
     }
 
     // --- match ----------------------------------------------------------------------------
@@ -2205,7 +2856,8 @@ private:
         std::string              prefix;
         if (s->is_user(SymbolKind::enum_)) {
             for (const Symbol* a : s->symbol->member_order) all.push_back(a->name);
-            prefix = s->symbol->name + "::";
+            // option and result: their alternatives are written `std::ok` (spec 08).
+            prefix = is_std_instance(s, "option") || is_std_instance(s, "result") ? "std::" : s->symbol->name + "::";
         } else if (s->is(Kind::bool_)) {
             all = {"true", "false"};
         } else if (s->is(Kind::external) && s->external_base() == "std::result") {
@@ -2264,6 +2916,14 @@ private:
     std::set<const Expr*>                               branch_conflicts_;
     std::map<const Symbol*, const Type*>                subst_;   // template parameters of the instance being checked
     Instantiator*                                       instantiator_ = nullptr;   // makes function instances
+    std::unique_ptr<ct::Evaluator>                      evaluator_;   // compile-time evaluation (spec 15, 26)
+    std::set<const Symbol*>                             unknown_values_;   // compile-time values that depend on a template parameter
+
+    // On-demand checking for compile-time code; defined after Instantiator, which keeps the state.
+    bool begin_check(const Decl* d);
+    void end_check(const Decl* d);
+    bool ensure_function(const Symbol* s);
+    std::shared_ptr<const ct::Value> ensure_constant(const Symbol* g);
 
     /// The instance of the function template `templ` for `args` (spec 14), defined after Instantiator.
     Symbol* instantiate_function(const Symbol* templ, const std::vector<const Type*>& args);
@@ -2289,6 +2949,7 @@ public:
         inst->template_of    = templ;
         inst->instance_index = ++count_[templ];
         for (std::size_t i = 0; i < params.size(); ++i) inst->template_subst[params[i]] = args[i];
+        inst->template_args = args;
         const Type* t = program_.types->user(inst);
         memo_[key]    = t;
         program_.instances.push_back(inst);
@@ -2309,6 +2970,7 @@ public:
         inst->template_of    = templ;
         inst->instance_index = ++count_[templ];
         for (std::size_t i = 0; i < params.size(); ++i) inst->template_subst[params[i]] = args[i];
+        inst->template_args = args;
         fn_memo_[key] = inst;   // before checking the body, so that recursive calls find it
         program_.instances.push_back(inst);
         program_.instance_copies.push_back(copy);
@@ -2330,6 +2992,13 @@ private:
         return parsed.decls.front().get();
     }
 
+public:
+    /// Which declarations are being checked or are done (functions and compile_time constants
+    /// can be checked early, on demand, when compile-time code needs them).
+    enum class State { checking, done };
+    std::map<const Decl*, State> states;
+
+private:
     sema::Program&                                                        program_;
     const SourceManager&                                                  sources_;
     DiagnosticEngine&                                                     diags_;
@@ -2337,6 +3006,34 @@ private:
     std::map<std::pair<const Symbol*, std::vector<const Type*>>, Symbol*>     fn_memo_;
     std::map<const Symbol*, unsigned>                                     count_;
 };
+
+bool Checker::begin_check(const Decl* d) {
+    if (!instantiator_) return true;
+    if (instantiator_->states.count(d)) return false;
+    instantiator_->states[d] = Instantiator::State::checking;
+    return true;
+}
+
+void Checker::end_check(const Decl* d) {
+    if (instantiator_) instantiator_->states[d] = Instantiator::State::done;
+}
+
+bool Checker::ensure_function(const Symbol* s) {
+    const Decl* d = s->definition ? s->definition : s->decl;
+    if (!instantiator_ || !d) return false;
+    auto it = instantiator_->states.find(d);
+    if (it != instantiator_->states.end()) return it->second == Instantiator::State::done;
+    Checker(program_, diags_, instantiator_).check_function_symbol(s);
+    it = instantiator_->states.find(d);
+    return it != instantiator_->states.end() && it->second == Instantiator::State::done;
+}
+
+std::shared_ptr<const ct::Value> Checker::ensure_constant(const Symbol* g) {
+    if (g->ct_value || !instantiator_ || !g->decl) return g->ct_value;
+    if (instantiator_->states.count(g->decl)) return g->ct_value;   // in progress (a cycle) or done without a value
+    Checker(program_, diags_, instantiator_).check_global_symbol(g);
+    return g->ct_value;
+}
 
 // Null only when the template's source did not parse (already reported) or no instantiator is set.
 Symbol* Checker::instantiate_function(const Symbol* templ, const std::vector<const Type*>& args) {
@@ -2350,9 +3047,21 @@ void check_types(sema::Program& program, const SourceManager& sources, Diagnosti
     Instantiator instantiator(program, sources, diags);
     program.types->set_instantiator(
         [&](const Symbol* templ, const std::vector<const Type*>& args) { return instantiator.instantiate(templ, args); });
+    // A compile_time `type` constant used as a type (spec 26): evaluated on demand while checking.
+    program.types->set_type_value_resolver([&](const Symbol* s) -> const Type* {
+        if (!s->ct_value && s->kind == SymbolKind::global && s->decl && !instantiator.states.count(s->decl)) {
+            Checker(program, diags, &instantiator).check_global_symbol(s);
+        }
+        if (!s->ct_value || s->ct_value->kind != ct::Value::Kind::type) return nullptr;
+        return s->ct_value->type_value;
+    });
     Checker(program, diags, &instantiator).run();
     // Instances are only made while checking. Later phases see the ones that exist.
     program.types->set_instantiator(nullptr);
+    program.types->set_type_value_resolver([](const Symbol* s) -> const Type* {
+        if (!s->ct_value || s->ct_value->kind != ct::Value::Kind::type) return nullptr;
+        return s->ct_value->type_value;
+    });
 }
 
 } // namespace rift

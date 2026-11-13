@@ -1,0 +1,9 @@
+exit: 0
+--- stdout
+parsed stop
+jump needs a value
+42 0
+0 0 true
+2432902008176640000 6765 1920x1080
+fields: 3, size 12
+--- stderr

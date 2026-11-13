@@ -1,0 +1,27 @@
+// feature 12: value_or, expect, or_error and '?' consume their std::option / std::result.
+import std;
+
+class resource {
+public:
+    ~resource() {}
+}
+
+enum failure : u8 { lost }
+
+std::option<resource> get() { return std::none; }
+std::result<resource, failure> load() { return std::error(failure::lost); }
+
+std::result<u32, failure> consume() {
+    std::option<resource> o = get();
+    resource a = o.value_or(resource{});          //~ error[E5001]: 'o' has type 'std::option<resource>', which is not a copy type
+    std::option<resource> p = get();
+    resource b = (move p).value_or(resource{});
+    resource c = p.expect("again");               //~ error[E5002]: 'p' is used after it was moved
+    std::result<resource, failure> r = load();
+    resource d = r?;                              //~ error[E5001]: 'r' has type
+    resource e = load()?;
+    std::option<u32> n = std::some(5u32);
+    u32 f = n.value_or(1);                        // copy types are copied
+    u32 g = n.value_or(2);
+    return std::ok(f + g);
+}

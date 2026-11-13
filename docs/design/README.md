@@ -1,6 +1,6 @@
-# Rift - Language Design (v0.5)
+# Rift - Language Design (v0.6)
 
-> **Status:** Draft v0.5. This folder replaces `docs/design_doc.md` (v0.2).
+> **Status:** Draft v0.6. This folder replaces `docs/design_doc.md` (v0.2).
 > **Lineage:** C++-inspired. Explicit, simple to use, high control.
 > **Files:** `.rifts` = source, `.rifth` = header.
 
@@ -35,6 +35,7 @@ Each file below describes **one concept** and can be read on its own. Every file
 | 23 | [23-compile-checks.md](23-compile-checks.md) | Checks: `compile_time check`, `run_time check`, mode-gated checks, custom compiler messages |
 | 24 | [24-build-modes.md](24-build-modes.md) | `debug`, `release`, `release_with_debug_info` and user-defined modes |
 | 25 | [25-build-system.md](25-build-system.md) | `build.rifts`: Rift as the build system, including C/C++ |
+| 26 | [26-metaprogramming.md](26-metaprogramming.md) | Types as values, reflection with `std::meta`, `for compile_time` |
 
 A complete program written to these rules is in [`examples/employees.rifts`](../../examples/employees.rifts).
 

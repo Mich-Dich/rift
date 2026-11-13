@@ -162,6 +162,11 @@ RIFT_DIAG(E4150, error,   "result must be used")
 RIFT_DIAG(E4160, error,   "cannot deduce template argument")
 RIFT_DIAG(E4170, error,   "format spec does not fit the value's type")
 RIFT_DIAG(E4180, error,   "wrong number of template arguments")
+RIFT_DIAG(E4190, error,   "'?' needs a std::result or std::option")
+RIFT_DIAG(E4191, error,   "'?' does not fit the function's return type")
+RIFT_DIAG(E4200, error,   "not a compile-time value")
+RIFT_DIAG(E4201, error,   "compile-time evaluation failed")
+RIFT_DIAG(E4202, error,   "compile-time-only value used at run time")
 
 // --- ownership and references ---------------------------------------------------------------
 RIFT_DIAG(E5001, error,   "value of a non-copy type would be copied implicitly")

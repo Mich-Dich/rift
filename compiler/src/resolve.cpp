@@ -122,7 +122,14 @@ std::optional<std::string> closest(std::string_view name, const std::vector<std:
 
 bool is_builtin_type_name(std::string_view name) {
     std::optional<TokenKind> k = keyword_kind(name);
-    return k && is_type_keyword(*k);
+    return k && (is_type_keyword(*k) || *k == TokenKind::kw_type);
+}
+
+/// `type`: the type of type values (spec 26).
+bool is_type_type(const TypeExpr& t) {
+    if (t.kind != TypeKind::named) return false;
+    const Path& p = t.as<NamedType>().path;
+    return p.segments.size() == 1 && p.segments[0].name == "type" && p.segments[0].template_args.empty();
 }
 
 enum class Want { value, type };
@@ -295,6 +302,8 @@ private:
         case DeclKind::field: {
             sym = m.make(SymbolKind::global, d.name, d.name_span);
             sym->is_mut = d.as<VariableDecl>().is_mut;
+            sym->is_type_value = d.as<VariableDecl>().storage == Storage::compile_time && d.as<VariableDecl>().type &&
+                                 is_type_type(*d.as<VariableDecl>().type);
             break;
         }
         case DeclKind::struct_:
@@ -653,9 +662,11 @@ private:
             if (!d.is_template) return;
             pushed = true;
             r.template_params_.emplace_back();
+            d.template_param_symbols.clear();
             for (const TemplateParam& p : d.template_params) {
                 Symbol* s = r.module_->make(p.is_type ? SymbolKind::type_param : SymbolKind::value_param, p.name, p.span);
                 r.template_params_.back().push_back(s);
+                d.template_param_symbols.push_back(s);
             }
             // Constraints and value types may refer to the parameters themselves.
             if (!resolve_constraints) return;
@@ -949,6 +960,7 @@ private:
             for (Param& p : fn.params) {
                 bool ref = p.type->kind == TypeKind::reference;
                 p.symbol = declare_local(p.name, p.span, ref ? LocalKind::ref_param : LocalKind::value_param, p.is_mut, ref);
+                p.symbol->is_type_value = fn.is_compile_time && is_type_type(*p.type);
             }
             resolve_block(*fn.body);
             scopes_.pop_back();
@@ -1074,18 +1086,11 @@ private:
 
     Symbol* check_want(Symbol* sym, Want want, Span span, std::string_view display) {
         if (!sym) return nullptr;
+        if (want == Want::type && sym->is_type_value) return sym;   // a compile_time type value used as a type (spec 26)
+        if (want == Want::value && sym->is_type()) return sym;      // a type used as a value (spec 26)
         if (want == Want::type && !sym->is_type()) {
             error(DiagCode::E3022, span, std::format("'{}' is a {}, not a type", display, sema::to_string(sym->kind)),
                   "not a type");
-            return nullptr;
-        }
-        if (want == Want::value && sym->is_type()) {
-            Diagnostic& e = error(DiagCode::E3022, span,
-                                  std::format("'{}' is a {}, not a value", display, sema::to_string(sym->kind)),
-                                  "not a value");
-            if (sym->kind == SymbolKind::struct_ || sym->kind == SymbolKind::class_) {
-                note(e, std::format("construct it with '{}{{ ... }}'", display));
-            }
             return nullptr;
         }
         return sym;
@@ -1094,6 +1099,13 @@ private:
     Symbol* lookup_single(PathSegment& seg, Want want, Span span) {
         const std::string& name = seg.name;
         if (want == Want::type) {
+            // A local compile_time `type` constant or a `type` parameter used as a type (spec 26).
+            for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
+                if (auto found = it->names.find(name); found != it->names.end()) {
+                    if (found->second->is_type_value) return found->second;
+                    break;
+                }
+            }
             if (Symbol* tp = find_template_param(name)) {
                 return check_want(tp, want, span, name);
             }
@@ -1173,6 +1185,34 @@ private:
         walk_block(block);
     }
 
+    /// `std::name...`: items of the built-in std module (library/std), plus the alternatives of
+    /// `option` and `result`, which std exports directly (`std::ok`, spec 08). Names the library
+    /// does not declare yet stay opaque (null, no error): the compiler knows them itself.
+    Symbol* lookup_std(Path& path, Want want, Span span) {
+        Module* stdm = program_.std_module;
+        auto&   segs = path.segments;
+        if (!stdm || segs.size() < 2) return nullptr;
+        const std::string& name = segs[1].name;
+        if (auto it = stdm->items.find(name); it != stdm->items.end()) {
+            return lookup_members(it->second.front(), path, 2, want, span);
+        }
+        if (segs.size() == 2) {
+            if (Symbol* alt = std_export(name)) return check_want(alt, want, span, "std::" + name);
+        }
+        return nullptr;
+    }
+
+    /// The four alternatives exported directly in `std::` (spec 08), or null.
+    Symbol* std_export(const std::string& name) const {
+        Module* stdm = program_.std_module;
+        std::string_view owner = name == "some" || name == "none" ? "option" : name == "ok" || name == "error" ? "result" : "";
+        if (!stdm || owner.empty()) return nullptr;
+        auto it = stdm->items.find(std::string(owner));
+        if (it == stdm->items.end()) return nullptr;
+        auto alt = it->second.front()->members.find(name);
+        return alt == it->second.front()->members.end() ? nullptr : alt->second.front();
+    }
+
     /// Walks `T::member::...` from a type symbol.
     Symbol* lookup_members(Symbol* base, Path& path, std::size_t i, Want want, Span span) {
         std::string display;
@@ -1232,7 +1272,7 @@ private:
         resolve_template_args(path);
         auto& segs = path.segments;
         if (segs.size() == 1) {
-            if (want == Want::type && is_builtin_type_name(segs[0].name)) return nullptr;
+            if (is_builtin_type_name(segs[0].name)) return nullptr;   // `u32`, also as a type value
             return lookup_single(segs[0], want, span);
         }
         const std::string& first = segs[0].name;
@@ -1240,11 +1280,14 @@ private:
             return nullptr;   // `u32::max`: built-in members come with the type checker
         }
         if (first == "std") {
-            if (!std_visible() && std_reported_.insert(segs[0].span.file).second) {
-                note(error(DiagCode::E3023, segs[0].span, "the standard library is not imported", "'std' not imported"),
-                     "add 'import std;' at the top of the file (reported once per file)");
+            if (!std_visible()) {
+                if (std_reported_.insert(segs[0].span.file).second) {
+                    note(error(DiagCode::E3023, segs[0].span, "the standard library is not imported", "'std' not imported"),
+                         "add 'import std;' at the top of the file (reported once per file)");
+                }
+                return nullptr;
             }
-            return nullptr;
+            return lookup_std(path, want, span);
         }
         if (Symbol* tp = find_template_param(first)) {
             (void)tp;
@@ -1338,6 +1381,7 @@ private:
             if (v.init) resolve_expr(*v.init);
             v.symbol = declare_local(v.name, v.name_span, LocalKind::variable, v.is_mut,
                                      v.type->kind == TypeKind::reference);
+            v.symbol->is_type_value = v.storage == Storage::compile_time && is_type_type(*v.type);
             return;
         }
         case StmtKind::assign: {
@@ -1468,6 +1512,7 @@ private:
             resolve_type(*f.type);
             f.symbol = declare_local(f.name, f.name_span, LocalKind::loop_variable, f.is_mut,
                                      f.type->kind == TypeKind::reference);
+            f.symbol->is_type_value = f.is_compile_time && is_type_type(*f.type);
             ++fn_.loop_depth;
             resolve_block(*f.body);
             --fn_.loop_depth;

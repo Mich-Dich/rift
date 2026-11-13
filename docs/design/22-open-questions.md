@@ -17,7 +17,10 @@ Ordered roughly by how much they affect the rest of the design.
 | 11 | **Compile-time heap** | Allowed, stored in static memory (see 15) | Exact rules for which types support this |
 | 12 | **Module aliases** | Not available | `import std::filesystem as fs;` would be short *and* explicit. Does it break "always fully qualified"? |
 | 13 | **Attributes** | Not designed | v0.2 *Future thoughts* used `[required]`, which clashes with lambda syntax `[...]`. Proposal: `@required` |
-| 14 | **Types as values / reflection** | Not designed | `.type = std::filesystem::path` from *Future thoughts* needs it |
+| 14 | **Types as values / reflection** | **Designed** (see 26): `type` values, `std::meta`, `for compile_time` | `.type = std::filesystem::path` from *Future thoughts* is now a `type` value |
+| 27 | **Generating declarations** | Not available (see 26) | Compile-time code that creates types, fields or functions (`std::meta::struct_builder`, like Zig). Needs rules for names, headers and error locations |
+| 28 | **Derive** | Not available | `@derive(std::formattable)` implementing an interface from the fields (needs attributes, #13). With 26 the same code can already be written as a generic function |
+| 29 | **Reflecting methods and template arguments** | Not available | `std::meta::methods<T>()`, `std::meta::template_args<T>()`, calling a method through reflection |
 | 15 | **Language as build system** | **Designed** (see 25) | |
 | 16 | **SIMD** | Sketch (see 21) | |
 | 18 | **`compile_time` parameters** | Covered by `compile_time check` entry checks (see 23) | A parameter modifier would only be needed if the *body* must use the value at compile time (e.g. to pick a type) |

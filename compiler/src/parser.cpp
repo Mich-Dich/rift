@@ -109,7 +109,7 @@ bool is_literal(TokenKind k) {
     }
 }
 
-bool starts_type(TokenKind k) { return k == TokenKind::identifier || is_type_keyword(k); }
+bool starts_type(TokenKind k) { return k == TokenKind::identifier || is_type_keyword(k) || k == TokenKind::kw_type; }
 
 bool starts_expression(TokenKind k) {
     if (is_literal(k) || starts_type(k)) {
@@ -1215,7 +1215,8 @@ private:
             return;
         }
         default:
-            if (is_type_keyword(cur().kind) && peek(1).kind != TokenKind::colon_colon) {
+            if ((is_type_keyword(cur().kind) || at(TokenKind::kw_type)) && peek(1).kind != TokenKind::colon_colon &&
+                peek(1).kind != TokenKind::r_brace && peek(1).kind != TokenKind::semicolon) {
                 block.statements.push_back(parse_variable_stmt(start, Storage::local));
                 return;
             }
@@ -1313,6 +1314,7 @@ private:
     ExprPtr parse_for() {
         Span start = advance().span;
         auto loop  = std::make_unique<ForExpr>(start);
+        loop->is_compile_time = accept(TokenKind::kw_compile_time);
         Span open  = expect(TokenKind::l_paren, "after 'for'").span;
         bool mut   = accept(TokenKind::kw_mut);
         loop->type   = parse_type({});
@@ -1483,7 +1485,12 @@ private:
                 std::vector<TemplateArg> args;
                 bool ok = speculate([&] {
                     args = parse_template_args();
-                    if (!at(TokenKind::l_paren) && !at(TokenKind::colon_colon) && !at(TokenKind::l_brace)) {
+                    // Template arguments before `(`, `::` or `{`, or ending a type value
+                    // (`std::option<u32>;`, spec 26): a comparison cannot be followed by these.
+                    bool ends_value = at(TokenKind::r_paren) || at(TokenKind::comma) || at(TokenKind::semicolon) ||
+                                      at(TokenKind::r_brace) || at(TokenKind::r_bracket) || at(TokenKind::eq_eq) ||
+                                      at(TokenKind::bang_eq);
+                    if (!at(TokenKind::l_paren) && !at(TokenKind::colon_colon) && !at(TokenKind::l_brace) && !ends_value) {
                         throw ParseError{};
                     }
                 });
@@ -1758,7 +1765,7 @@ private:
             return std::make_unique<PathExpr>(from(start), std::move(path));
         }
         default:
-            if (is_type_keyword(cur().kind) && peek(1).kind == TokenKind::colon_colon) {
+            if (is_type_keyword(cur().kind)) {   // `u32::max`, or the type value `u32` (spec 26)
                 Path path = parse_expr_path(false);
                 return std::make_unique<PathExpr>(from(start), std::move(path));
             }

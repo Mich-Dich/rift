@@ -1,0 +1,30 @@
+// The Rift standard library: core types (spec 08, 11, 04, 20).
+//
+// This file is compiled into riftc and loaded as module `std` by `import std;`. Names under
+// `std::` that are not declared here yet (containers, strings, printing) are still known only
+// to the compiler.
+//
+// The alternatives of `option` and `result` are also exported directly in `std::`
+// (`std::some(x)`, `std::none`, `std::ok(x)`, `std::error(e)`, spec 08). Their template
+// arguments come from context, like the type of a literal. Their methods (`value_or`,
+// `expect`, `or_error`, `map_error`) and the `?` operator are provided by the compiler.
+
+/// A value that may be absent.
+template<type T>
+enum option : u8 {
+    some(T),
+    none,
+}
+
+/// The result of an operation that can fail.
+template<type T, type E>
+enum result : u8 {
+    ok(T),
+    error(E),
+}
+
+/// What `main` reports to the operating system (spec 04).
+enum exit_code : u8 {
+    success = 0,
+    failure = 1,
+}

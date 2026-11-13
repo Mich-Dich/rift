@@ -1,0 +1,29 @@
+// feature 26: reflection handles must be known at compile time, and are used like other values.
+import std;
+
+struct point {
+    f64 x;
+    f64 y;
+}
+
+enum shape : u8 { dot, circle(f64) }
+
+compile_time std::meta::field first = std::meta::fields<point>()[0];
+
+void uses(point p, shape s) {
+    for compile_time (std::meta::field f : std::meta::fields<point>()) {
+        f64 a = f.get(p);
+        u32 b = f.get(p);                                 //~ error[E4010]: expected 'u32', found 'f64&'
+        u32 c = f.size;                                   //~ error[E4070]: 'std::meta::field' has no field 'size'
+        f.get(p) = 1.0;                                   //~ error[E4020]: cannot assign to 'the field'
+        f64 d = f.get(s);                                 //~ error[E4010]: (the reflected value)
+    }
+    for compile_time (std::meta::alternative a : std::meta::alternatives<shape>()) {
+        bool yes = a.is(s);
+        shape made = a.remove();                          //~ error[E4070]: 'std::meta::alternative' has no method 'remove'
+    }
+    f64 x = first.get(p);
+    for compile_time (u32 i : 0..2) {
+        u32 twice = i * 2;
+    }
+}

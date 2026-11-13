@@ -1,4 +1,4 @@
-// feature 03: every name must be declared; types and values are not interchangeable.
+// feature 03: every name must be declared. (Types used as values: see 26-metaprogramming.)
 struct point {
     f64 x = 0.0;
 }
@@ -9,7 +9,5 @@ u32 compute(u32 input) {
     u32 later = 1;
     pont p = default;                  //~ error[E3021]: cannot find type 'pont'
     compute x = 0;                     //~ error[E3022]: 'compute' is a function, not a type
-    u32 v = point;                     //~ error[E3022]: 'point' is a struct, not a value
-    point q = point();                 //~ error[E3022]: not a value
     return missing(result);            //~ error[E3020]: cannot find 'missing'
 }

@@ -1,0 +1,39 @@
+// feature 26: what compile-time code may use, and what exists only at compile time.
+import std;
+
+struct point {
+    f64 x;
+    f64 y;
+}
+
+compile_time u8 sum(u8 a, u8 b) { return a + b; }           //~ error[E4201]: 200 + 100 overflows u8
+compile_time u32 forever(u32 n) { return forever(n + 1); }  //~ error[E4201]: nested more than 256 deep
+compile_time u32 spin() {
+    mut u32 i = 0;
+    while (true) { i +%= 1; }                               //~ error[E4201]: more than 2000000 steps
+    return i;
+}
+u32 run_time_only(u32 x) { return x; }
+void takes_type(type t) {}                                  //~ error[E4202]: 'takes_type' is a run-time function
+
+compile_time u8  too_big   = sum(200, 100);
+compile_time u32 divided   = 10u32 / (5u32 - 5u32);         //~ error[E4201]: division by zero at compile time
+compile_time u32 deep      = forever(0);
+compile_time u32 endless   = spin();
+compile_time u32 not_ct    = run_time_only(1);              //~ error[E4120]: 'run_time_only'
+
+struct holder {
+    type kind;                                              //~ error[E4202]: 'kind' is a field
+}
+
+void uses(bool flag, point p) {
+    u32 v = point;                                          //~ error[E3022]: expected 'u32', found a type
+    point q = point();                                      //~ error[E3022]: 'point' is a struct, not a function
+    type t = u32;                                           //~ error[E4202]: 't' is a run-time variable
+    if compile_time (flag) {                                //~ error[E4200]: 'flag' is not a compile-time value
+        std::println("flag");
+    }
+    std::meta::field first = std::meta::fields<point>()[0]; //~ error[E4202]: 'first' is a run-time variable
+    for compile_time (std::meta::field f : std::meta::fields<u32>()) {//~ error[E4201]: std::meta::fields needs a struct or class, not u32
+    }
+}

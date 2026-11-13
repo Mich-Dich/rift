@@ -72,6 +72,8 @@ f32 c = double_it(3.14f32);          // ERROR: f64 doesn't convert to f32 implic
 ### Built-in compile-time functions
 `std::is_integer<T>()`, `std::is_float<T>()`, `std::is_same<A, B>()`, `std::implements<T, iface>()`, `std::size_of<T>()`, `std::align_of<T>()`, `std::type_name<T>()`.
 
+Types as compile-time values, reflection (`std::meta`) and `for compile_time` loops are described in 26.
+
 Checks (`compile_time check`, `run_time check`) and the diagnostic functions (`std::compile_error`, `std::compile_warning`, `std::compile_note`) are described in 23.
 
 ## Rationale

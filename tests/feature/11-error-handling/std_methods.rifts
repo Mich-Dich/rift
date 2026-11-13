@@ -1,0 +1,25 @@
+// feature 11: value_or, expect, or_error and map_error on std::option and std::result.
+import std;
+
+enum io_error : u8 { closed }
+
+std::option<u32> find() { return std::none; }
+std::result<u32, io_error> read() { return std::ok(1); }
+
+void methods() {
+    u32 a = find().value_or(7);
+    u32 b = read().value_or(0);
+    u32 c = find().expect("needs a value");
+    u32 d = read().expect(f"read failed after {a}");
+    std::result<u32, io_error> e = find().or_error(io_error::closed);
+    std::result<u32, u8> f = read().or_error(3u8);
+}
+
+void errors() {
+    u32 a = find().value_or(-1);                      //~ error[E4002]: -1 does not fit in 'u32'
+    u32 b = find().expect(5);                         //~ error[E4010]: expected 'std::static_str' (the message), found an integer literal
+    auto c = find().or_error(3);                      //~ error[E4001]: this integer literal has no type as the new error
+    u32 d = find().value_or();                        //~ error[E4030]: 'value_or' takes 1 argument, but 0 are given
+    u32 e = find().unwrap();                          //~ error[E4070]: 'std::option<u32>' has no method 'unwrap'
+    u32 f = find().map_error(5u32);                   //~ error[E4070]: has no method 'map_error'
+}

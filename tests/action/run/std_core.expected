@@ -1,0 +1,22 @@
+exit: 134
+--- stdout
+ok 8
+ok 16
+error full
+some 2
+none
+none
+99 2
+6 0
+bad 1
+some 1
+none
+some 12
+none
+none
+some 42
+none
+some 5
+got 2
+--- stderr
+tests/action/run/std_core.rifts:75:24: panic: 5 is odd

@@ -1,0 +1,37 @@
+// feature 11: '?' unwraps std::ok / std::some and returns the rest; the error types must be identical.
+import std;
+
+enum io_error : u8 { closed }
+enum parse_error : u8 { bad }
+
+std::result<u32, io_error> read() { return std::ok(1); }
+std::option<u32> find() { return std::none; }
+
+std::result<u32, io_error> good() {
+    u32 a = read()?;
+    u32 b = find().or_error(io_error::closed)?;
+    return std::ok(a + b);
+}
+
+std::option<u32> good_option() {
+    u32 a = find()?;
+    return std::some(a);
+}
+
+std::result<u32, parse_error> wrong_error() {
+    u32 a = read()?;                    //~ error[E4191]: '?' would return the error 'io_error', but 'wrong_error' returns errors of type 'parse_error'
+    u32 b = read().or_error(parse_error::bad)?;
+    return std::ok(a + b);
+}
+
+std::result<u32, io_error> option_in_result() {
+    u32 a = find()?;                    //~ error[E4191]: which returns 'std::result<u32, io_error>', not a std::option
+    return std::ok(a);
+}
+
+u32 plain() {
+    u32 a = read()?;                    //~ error[E4191]: '?' would return from 'plain', which returns 'u32'
+    u32 b = 5u32?;                      //~ error[E4190]: '?' needs a std::result or std::option, but this is 'u32'
+    u32 c = std::none?;                 //~ error[E4001]: 'std::none' has no type before '?'
+    return a;
+}

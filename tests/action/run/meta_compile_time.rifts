@@ -1,0 +1,98 @@
+// RUN: riftc run %s
+// Compile-time evaluation (spec 15, 26): loops, recursion and structs in compile_time
+// functions; parsing enums by name; changing fields through reflection.
+import std;
+
+enum command : u8 { start, stop, jump(u32) }
+
+template<type E>
+std::option<E> parse_enum(std::str text) {
+    for compile_time (std::meta::alternative a : std::meta::alternatives<E>()) {
+        if compile_time (!a.has_payload) {
+            if (text == a.name) {
+                return std::some(a.make());
+            }
+        }
+    }
+    return std::none;
+}
+
+template<type E>
+std::static_str name_of(E value) {
+    for compile_time (std::meta::alternative a : std::meta::alternatives<E>()) {
+        if (a.is(value)) {
+            return a.name;
+        }
+    }
+    std::panic("unreachable");
+}
+
+template<type E>
+u32 payload_or_zero(E value) {
+    for compile_time (std::meta::alternative a : std::meta::alternatives<E>()) {
+        if compile_time (a.has_payload) {
+            match (a.get(value)) {
+                std::some(p) => { return p; },
+                std::none => {},
+            }
+        }
+    }
+    return 0;
+}
+
+struct config {
+    u32 width = 640;
+    u32 height = 480;
+    bool fullscreen = false;
+}
+
+template<type T>
+void reset_numbers(mut T& value) {
+    for compile_time (std::meta::field f : std::meta::fields<T>()) {
+        compile_time type ft = f.type;
+        if compile_time (std::is_integer<ft>()) {
+            f.get(mut value) = 0;
+        }
+    }
+}
+
+compile_time u64 factorial(u64 n) {
+    mut u64 result = 1;
+    for (u64 i : 1..=n) {
+        result *= i;
+    }
+    return result;
+}
+
+compile_time u32 fib(u32 n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+
+compile_time config big() {
+    mut config c = config{};
+    c.width = 1920;
+    c.height = 1080;
+    return c;
+}
+
+compile_time u64 fact20 = factorial(20);
+compile_time u32 fib20 = fib(20);
+compile_time config defaults = big();
+
+void main() {
+    match (parse_enum<command>("stop")) {
+        std::some(c) => std::println(f"parsed {name_of(c)}"),
+        std::none => std::println("no"),
+    }
+    match (parse_enum<command>("jump")) {
+        std::some(c) => std::println(f"parsed {name_of(c)}"),
+        std::none => std::println("jump needs a value"),
+    }
+    std::println(f"{payload_or_zero(command::jump(42))} {payload_or_zero(command::stop)}");
+    mut config c = config{ .width = 800, .fullscreen = true };
+    reset_numbers(mut c);
+    std::println(f"{c.width} {c.height} {c.fullscreen}");
+    std::println(f"{fact20} {fib20} {defaults.width}x{defaults.height}");
+    std::println(f"fields: {std::meta::fields<config>().len()}, size {std::size_of<config>()}");
+}

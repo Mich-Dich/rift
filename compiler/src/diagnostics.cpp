@@ -220,6 +220,17 @@ void DiagnosticEngine::sort_by_location() {
         if (a.span.file != b.span.file) return a.span.file < b.span.file;
         return a.span.begin < b.span.begin;
     });
+    // The same error at the same place (e.g. from each copy of a `for compile_time` body, spec
+    // 26) is shown once.
+    std::vector<Diagnostic> unique;
+    for (Diagnostic& d : diagnostics_) {
+        bool seen = false;
+        for (auto it = unique.rbegin(); it != unique.rend() && it->span.file == d.span.file && it->span.begin == d.span.begin; ++it) {
+            if (it->code == d.code && it->span.end == d.span.end && it->message == d.message) seen = true;
+        }
+        if (!seen) unique.push_back(std::move(d));
+    }
+    diagnostics_ = std::move(unique);
 }
 
 std::size_t DiagnosticEngine::error_count() const {

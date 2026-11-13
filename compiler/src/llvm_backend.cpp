@@ -1,7 +1,10 @@
 #include "rift/llvm_backend.hpp"
 
 #include "rift/ast_printer.hpp"
+#include "rift/compile_time.hpp"
 #include "rift/types.hpp"
+
+#include <functional>
 
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Constants.h"
@@ -406,7 +409,8 @@ private:
 
     void variable_stmt(VariableStmt& v) {
         cur_ = v.name_span;
-        if (v.storage != Storage::local) unsupported(v.name_span, "static and compile_time variables");
+        if (v.storage == Storage::compile_time) return;   // a constant: its uses are constants (spec 15)
+        if (v.storage != Storage::local) unsupported(v.name_span, "static local variables");
         if (!v.symbol || !v.symbol->type) unsupported(v.name_span, "variables of an unknown type");
         // The initializer first: if it is unsupported, that is the error to show (not its type).
         llvm::Value* init = nullptr;
@@ -478,6 +482,10 @@ private:
     /// The value of `e`, or null for an expression of type void or never.
     llvm::Value* gen_expr(Expr& e) {
         cur_ = e.span;
+        if (e.constant) {   // computed at compile time (spec 15, 26)
+            if (llvm::Value* c = materialize(*e.constant, e.span)) return c;
+            unsupported(e.span, "a value that exists only at compile time");
+        }
         switch (e.kind) {
         case ExprKind::int_literal: return int_literal(e.as<LiteralExpr>(), e.type);
         case ExprKind::float_literal: return float_literal(e.as<LiteralExpr>(), e.type);
@@ -498,6 +506,7 @@ private:
         case ExprKind::bit: return bit_value(e.as<BitExpr>(), e.type);
         case ExprKind::for_: return for_loop(e.as<ForExpr>());
         case ExprKind::cast: return cast_value(e.as<CastExpr>());
+        case ExprKind::try_: return try_value(e.as<TryExpr>());
         case ExprKind::string_literal: {
             auto& lit = e.as<LiteralExpr>();
             if (lit.token_kind == TokenKind::format_string_literal) {
@@ -728,7 +737,12 @@ private:
     }
 
     llvm::Value* if_value(IfExpr& i, const types::Type* t) {
-        if (i.is_compile_time) unsupported(i.span, "'if compile_time'");
+        if (i.is_compile_time) {   // only the branch the checker chose exists (spec 15)
+            if (i.taken == 0) return gen_block(*i.then_block);
+            if (i.taken == 1) return gen_expr(*i.else_branch);
+            if (i.taken == 2) return nullptr;
+            unsupported(i.span, "'if compile_time' with a condition that is not known");
+        }
         llvm::Value*      cond     = gen_expr(*i.condition);
         bool              has_value = !is_void(t);
         llvm::AllocaInst* slot      = has_value ? entry_alloca(lower_type(types::strip_ref(t)), "if.value") : nullptr;
@@ -817,10 +831,15 @@ private:
             const Symbol*         s    = me.symbol;
             const types::Type*    obj  = types::strip_ref(me.object->type);
             std::string           name = me.name.segments.back().name;
+            if (me.object->constant && (me.object->constant->kind == ct::Value::Kind::field ||
+                                        me.object->constant->kind == ct::Value::Kind::alternative)) {
+                return meta_call(c, *me.object->constant, name);
+            }
             if (s && s->kind == SymbolKind::method) {
                 if (me.arrow) unsupported(c.span, "method calls through raw pointers");
                 return call_function(s, has_self(s) ? object_address(*me.object) : nullptr, c);
             }
+            if (!s && types::is_std_builtin_method(obj, name)) return std_method(c, me, obj, name);
             if (name == "clone" && c.args.empty() && obj && obj->is(Kind::user)) return gen_expr(*me.object);
             if (name == "len" && c.args.empty() && is_str(obj)) return b_.CreateExtractValue(gen_expr(*me.object), 1);
             if (name == "is_empty" && c.args.empty() && is_str(obj)) {
@@ -892,6 +911,8 @@ private:
             llvm::Value* wide = result->is_signed ? b.CreateSExt(call, llvm::Type::getInt128Ty(ctx_))
                                                   : b.CreateZExt(call, llvm::Type::getInt128Ty(ctx_));
             b.CreateRet(b.CreateCall(rift_exit_status_, {wide, loc_global(main->span)}));
+        } else if (result && result->is(Kind::user)) {
+            b.CreateRet(b.CreateZExt(call, i32));   // std::exit_code: success = 0, failure = 1
         } else {
             b.CreateRet(llvm::ConstantInt::get(i32, 0));
         }
@@ -1067,6 +1088,7 @@ private:
 
     llvm::Value* default_value(const types::Type* t, Span where) {
         if (t && t->is(Kind::user) && is_struct_symbol(t->symbol)) return build_struct(t->symbol, {});
+        if (types::is_std_instance(t, "option")) return alternative_value(alternative(t->symbol, "none"), nullptr);
         if (t && (t->is_integer() || t->is_float() || t->is(Kind::bool_) || t->is(Kind::char_) || t->is(Kind::pointer))) {
             return llvm::Constant::getNullValue(lower_type(t));
         }
@@ -1082,6 +1104,12 @@ private:
         case ExprKind::this_:
         case ExprKind::member: return true;
         case ExprKind::unary: return e.as<UnaryExpr>().op == UnaryOp::deref;
+        case ExprKind::call: {   // `f.get(value)` (spec 26)
+            const auto& c = e.as<CallExpr>();
+            if (c.callee->kind != ExprKind::member) return false;
+            const auto& object = *c.callee->as<MemberExpr>().object;
+            return object.constant && object.constant->kind == ct::Value::Kind::field;
+        }
         default: return false;
         }
     }
@@ -1111,6 +1139,16 @@ private:
         case ExprKind::unary:
             if (e.as<UnaryExpr>().op == UnaryOp::deref) return gen_expr(*e.as<UnaryExpr>().operand);
             break;
+        case ExprKind::call: {   // `f.get(value)`: the field (spec 26)
+            auto& c = e.as<CallExpr>();
+            if (c.callee->kind == ExprKind::member) {
+                Expr& object = *c.callee->as<MemberExpr>().object;
+                if (object.constant && object.constant->kind == ct::Value::Kind::field && c.args.size() == 1) {
+                    return field_address(*object.constant, *c.args[0]);
+                }
+            }
+            break;
+        }
         default: break;
         }
         unsupported(e.span, "this place");
@@ -1454,6 +1492,23 @@ private:
     /// `for x in a..b` and `for x in a..=b` over integers. The inclusive form uses a flag so that
     /// `a..=MAX` never overflows (as in the C backend).
     llvm::Value* for_loop(ForExpr& f) {
+        if (f.unrolled) {   // `for compile_time`: the copies run one after the other (spec 26)
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx_, "unrolled.end", cur_fn_);
+            for (BlockPtr& copy : f.copies) {
+                llvm::BasicBlock* next = llvm::BasicBlock::Create(ctx_, "unrolled.next", cur_fn_);
+                loops_.push_back(Loop{exit_bb, next});
+                open_scope(true);
+                gen_block(*copy);
+                close_scope();
+                loops_.pop_back();
+                if (!terminated()) b_.CreateBr(next);
+                b_.SetInsertPoint(next);
+            }
+            b_.CreateBr(exit_bb);
+            b_.SetInsertPoint(exit_bb);
+            return nullptr;
+        }
+        if (f.is_compile_time) unsupported(f.span, "'for compile_time' over elements that are not known");
         Expr* it = f.iterable.get();
         if (it->kind != ExprKind::range) unsupported(it->span, "'for' over anything but a range 'a..b'");
         auto&              r  = it->as<RangeExpr>();
@@ -1574,6 +1629,7 @@ private:
         const types::Type* to   = types::strip_ref(c.type);
         const types::Type* from = types::strip_ref(c.operand->type);
         const std::string& variant = c.variant;
+        if (variant == "checked" && types::is_std_instance(to, "option")) return checked_cast(c, from, to);
         if (variant == "checked" || variant == "dynamic") {
             unsupported(c.span, std::format("'cast::{}' (it returns std::option)", variant));
         }
@@ -1588,6 +1644,274 @@ private:
         }
         // cast<T> (lossless), cast::truncate (keeps the low bits) and cast::round are conversions.
         return convert(v, from, to);
+    }
+
+    // --- compile-time values (spec 15, 26) ---------------------------------------------------
+
+    /// The constant for a value computed at compile time; null for values that exist only at
+    /// compile time (types, reflection data, lists).
+    llvm::Value* materialize(const ct::Value& v, Span where) {
+        const types::Type* t = types::strip_ref(v.type);
+        switch (v.kind) {
+        case ct::Value::Kind::integer: {
+            auto* lt = llvm::cast<llvm::IntegerType>(lower_type(t));
+            return llvm::ConstantInt::get(ctx_, wide(v.integer, lt->getBitWidth()));
+        }
+        case ct::Value::Kind::floating: return llvm::ConstantFP::get(lower_type(t), v.floating);
+        case ct::Value::Kind::boolean: return llvm::ConstantInt::getBool(ctx_, v.boolean);
+        case ct::Value::Kind::character:
+            return llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx_), static_cast<std::uint64_t>(v.character));
+        case ct::Value::Kind::string: return str_constant(v.string);
+        case ct::Value::Kind::enumeration: {
+            const Symbol* alt = alternative(t->symbol, v.symbol->name);
+            llvm::Value*  payload = nullptr;
+            if (!v.elements.empty()) {
+                payload = materialize(v.elements[0], where);
+                if (!payload) return nullptr;
+            }
+            return alternative_value(alt, payload);
+        }
+        case ct::Value::Kind::aggregate: {
+            std::map<std::string, llvm::Value*> given;
+            std::size_t i = 0;
+            for (const Symbol* f : fields_of(t->symbol)) {
+                if (i >= v.elements.size()) break;
+                llvm::Value* x = materialize(v.elements[i++], where);
+                if (!x) return nullptr;
+                given[f->name] = x;
+            }
+            return build_struct(t->symbol, given);
+        }
+        default: return nullptr;
+        }
+    }
+
+    /// The address of the field a reflected `std::meta::field` names, in `object` (spec 26).
+    llvm::Value* field_address(const ct::Value& field, Expr& object) {
+        const Symbol* f = field.symbol;
+        return b_.CreateStructGEP(user_type(f->parent), object_address(object), field_index(f));
+    }
+
+    /// `f.get(value)`, `a.is(value)`, `a.get(value)`, `a.make(...)`.
+    llvm::Value* meta_call(CallExpr& c, const ct::Value& handle, const std::string& name) {
+        if (handle.kind == ct::Value::Kind::field) {
+            llvm::Value* addr = field_address(handle, *c.args.at(0));
+            return b_.CreateLoad(lower_type(types::strip_ref(static_cast<Expr&>(c).type)), addr);
+        }
+        const Symbol* e   = handle.type_value->symbol;
+        const Symbol* alt = alternative(e, handle.symbol->name);
+        if (name == "make") {
+            llvm::Value* payload = c.args.empty() ? nullptr : gen_expr(*c.args[0]);
+            if (!c.args.empty()) moved_out(*c.args[0]);
+            return alternative_value(alt, payload);
+        }
+        llvm::Value* addr = object_address(*c.args.at(0));
+        llvm::Value* tag  = has_payloads(e) ? b_.CreateLoad(enum_tag_type(e), b_.CreateStructGEP(user_type(e), addr, 0))
+                                            : b_.CreateLoad(enum_tag_type(e), addr);
+        llvm::Value* is   = b_.CreateICmpEQ(tag, tag_constant(alt));
+        if (name == "is") return is;
+        const Symbol* option = types::strip_ref(static_cast<Expr&>(c).type)->symbol;   // a.get(value): std::option<P&>
+        llvm::Value*  some   = alternative_value(alternative(option, "some"), b_.CreateStructGEP(user_type(e), addr, 1));
+        llvm::Value*  none   = alternative_value(alternative(option, "none"), nullptr);
+        return b_.CreateSelect(is, some, none);
+    }
+
+    // --- std::option and std::result (spec 11) -----------------------------------------------
+
+    /// The alternative `name` of the enum (instance) `e`.
+    static const Symbol* alternative(const Symbol* e, const std::string& name) {
+        return e->members.at(name).front();
+    }
+
+    /// The alternative that carries the value: `some` or `ok`.
+    static const Symbol* good_alternative(const Symbol* e) {
+        return alternative(e, e->members.count("ok") ? "ok" : "some");
+    }
+
+    /// Stores the value of `operand` (an option or result, consumed) in a fresh slot and tests
+    /// whether it holds `some` / `ok`.
+    std::pair<llvm::AllocaInst*, llvm::Value*> unpack(Expr& operand, const Symbol* e) {
+        llvm::Type*       et   = user_type(e);
+        llvm::AllocaInst* slot = entry_alloca(et, "unpacked");
+        b_.CreateStore(gen_expr(operand), slot);
+        moved_out(operand);
+        llvm::Value* tag = b_.CreateLoad(enum_tag_type(e), b_.CreateStructGEP(et, slot, 0));
+        return {slot, b_.CreateICmpEQ(tag, tag_constant(good_alternative(e)))};
+    }
+
+    /// The payload of alternative `alt`, read from the enum at `slot`.
+    llvm::Value* payload_at(llvm::AllocaInst* slot, const Symbol* alt) {
+        return b_.CreateLoad(lower_type(payload_of(alt)), b_.CreateStructGEP(user_type(alt->parent), slot, 1));
+    }
+
+    /// Destroys the object at `addr` if its type needs it (a value that is thrown away).
+    void drop_value(const types::Type* t, llvm::Value* addr) {
+        if (needs_drop(t)) b_.CreateCall(drop_function(t), {addr});
+    }
+
+    /// Branches on `good`; `on_good` / `on_bad` produce a value of type `t` (or end the block).
+    llvm::Value* branch_value(llvm::Value* good, const types::Type* t, const std::function<llvm::Value*()>& on_good,
+                              const std::function<llvm::Value*()>& on_bad) {
+        llvm::AllocaInst* out    = entry_alloca(lower_type(t), "value");
+        llvm::BasicBlock* yes    = llvm::BasicBlock::Create(ctx_, "good", cur_fn_);
+        llvm::BasicBlock* no     = llvm::BasicBlock::Create(ctx_, "bad", cur_fn_);
+        llvm::BasicBlock* done   = llvm::BasicBlock::Create(ctx_, "joined", cur_fn_);
+        b_.CreateCondBr(good, yes, no);
+        for (auto [block, make] : {std::pair{yes, &on_good}, std::pair{no, &on_bad}}) {
+            b_.SetInsertPoint(block);
+            llvm::Value* v = (*make)();
+            if (!terminated()) {
+                b_.CreateStore(v, out);
+                b_.CreateBr(done);
+            }
+        }
+        b_.SetInsertPoint(done);
+        return b_.CreateLoad(lower_type(t), out);
+    }
+
+    /// `r?`: the `ok` / `some` value, or return the error / `none` from the function.
+    llvm::Value* try_value(TryExpr& t) {
+        const Symbol*      e     = types::strip_ref(t.operand->type)->symbol;
+        auto [slot, good]        = unpack(*t.operand, e);
+        const Symbol*      ok    = good_alternative(e);
+        const types::Type* value = payload_of(ok);
+        const Symbol*      ret   = types::strip_ref(result_)->symbol;   // the function's own option / result
+        return branch_value(good, value, [&] { return payload_at(slot, ok); }, [&]() -> llvm::Value* {
+            llvm::Value* r = ret->members.count("error")
+                                 ? alternative_value(alternative(ret, "error"), payload_at(slot, alternative(e, "error")))
+                                 : alternative_value(alternative(ret, "none"), nullptr);
+            destroy_from(0);
+            b_.CreateRet(r);
+            return nullptr;
+        });
+    }
+
+    /// value_or, expect and or_error (map_error needs function values). The receiver is consumed;
+    /// a part that is not used is destroyed (spec 11, 12).
+    llvm::Value* std_method(CallExpr& c, MemberExpr& me, const types::Type* t, const std::string& name) {
+        if (name == "map_error") unsupported(c.span, "'map_error' (it needs function values)");
+        const Symbol*      e     = t->symbol;
+        auto [slot, good]        = unpack(*me.object, e);
+        const Symbol*      ok    = good_alternative(e);
+        const types::Type* value = payload_of(ok);
+        const Symbol*      error = e->members.count("error") ? alternative(e, "error") : nullptr;
+        auto drop_error = [&] {
+            if (error) drop_value(payload_of(error), b_.CreateStructGEP(user_type(e), slot, 1));
+        };
+        Expr& arg = *c.args[0];
+        if (name == "expect") {
+            return branch_value(good, value, [&] { return payload_at(slot, ok); }, [&]() -> llvm::Value* {
+                panic_with(arg, me.name.span);
+                return nullptr;
+            });
+        }
+        // value_or and or_error: the argument is evaluated first, whichever way it goes.
+        const types::Type* at = types::strip_ref(arg.type);
+        llvm::AllocaInst*  a  = entry_alloca(lower_type(at), "argument");
+        b_.CreateStore(gen_expr(arg), a);
+        moved_out(arg);
+        if (name == "value_or") {
+            return branch_value(good, value, [&] {
+                drop_value(at, a);
+                return payload_at(slot, ok);
+            }, [&] {
+                drop_error();
+                return b_.CreateLoad(lower_type(at), a);
+            });
+        }
+        const types::Type* rt = types::strip_ref(static_cast<Expr&>(c).type);   // or_error: result<T, E2>
+        return branch_value(good, rt, [&] {
+            drop_value(at, a);
+            return alternative_value(alternative(rt->symbol, "ok"), payload_at(slot, ok));
+        }, [&] {
+            drop_error();
+            return alternative_value(alternative(rt->symbol, "error"), b_.CreateLoad(lower_type(at), a));
+        });
+    }
+
+    /// Panics with `message` (a string or an f-string) at `where`.
+    void panic_with(Expr& message, Span where) {
+        auto* p   = ptr_type();
+        auto* i64 = llvm::Type::getInt64Ty(ctx_);
+        auto* vd  = llvm::Type::getVoidTy(ctx_);
+        if (message.kind == ExprKind::string_literal && message.as<LiteralExpr>().token_kind == TokenKind::format_string_literal) {
+            llvm::AllocaInst* buf = entry_alloca(buffer_type(), "buffer");
+            b_.CreateStore(llvm::ConstantAggregateZero::get(buffer_type()), buf);
+            for (FormatPart& part : message.as<LiteralExpr>().format_parts) {
+                if (part.expr) {
+                    format_hole(buf, part);
+                } else {
+                    b_.CreateCall(runtime("rift_buf_put", vd, {p, p, i64}),
+                                  {buf, message_bytes(part.text), llvm::ConstantInt::get(i64, part.text.size())});
+                }
+            }
+            b_.CreateCall(runtime("rift_panic_buf", vd, {p, p}), {loc_global(where), buf});
+        } else {
+            llvm::Value* v = gen_expr(message);
+            b_.CreateCall(runtime("rift_panic_str", vd, {p, p, i64}),
+                          {loc_global(where), b_.CreateExtractValue(v, 0), b_.CreateExtractValue(v, 1)});
+        }
+        b_.CreateUnreachable();
+    }
+
+    /// `cast::checked<T>(x)`: `std::some` of the converted value when it is exactly the same
+    /// number, otherwise `std::none` (spec 17).
+    llvm::Value* checked_cast(CastExpr& c, const types::Type* from, const types::Type* option) {
+        const types::Type* to = option->symbol->template_args[0];
+        if (!from->is_numeric() || !to->is_numeric()) unsupported(c.span, "'cast::checked' between these types");
+        llvm::Value* v         = gen_expr(*c.operand);
+        llvm::Value* converted = nullptr;
+        llvm::Value* exact     = nullptr;
+        auto*        dt        = llvm::Type::getDoubleTy(ctx_);
+        // [low, high) of an integer type, as doubles (both are powers of two, so exact).
+        auto range_of = [&](const types::Type* it, llvm::Value* f) {
+            double low  = it->is_signed ? -std::ldexp(1.0, it->bits - 1) : 0.0;
+            double high = std::ldexp(1.0, it->is_signed ? it->bits - 1 : it->bits);
+            llvm::Value* wide = f->getType() == dt ? f : b_.CreateFPExt(f, dt);
+            return b_.CreateAnd(b_.CreateFCmpOGE(wide, llvm::ConstantFP::get(dt, low)),
+                                b_.CreateFCmpOLT(wide, llvm::ConstantFP::get(dt, high)));
+        };
+        if (from->is_integer() && to->is_integer()) {
+            converted = convert(v, from, to);
+            exact     = b_.CreateICmpEQ(convert(converted, to, from), v);
+            if (from->is_signed && !to->is_signed) {
+                exact = b_.CreateAnd(exact, b_.CreateICmpSGE(v, llvm::ConstantInt::get(v->getType(), 0)));
+            } else if (!from->is_signed && to->is_signed) {
+                exact = b_.CreateAnd(exact, b_.CreateICmpSGE(converted, llvm::ConstantInt::get(converted->getType(), 0)));
+            }
+        } else if (from->is_integer()) {   // int -> float: the float must convert back to the same integer
+            converted = convert(v, from, to);
+            llvm::BasicBlock* test = b_.GetInsertBlock();
+            llvm::BasicBlock* back = llvm::BasicBlock::Create(ctx_, "checked.back", cur_fn_);
+            llvm::BasicBlock* done = llvm::BasicBlock::Create(ctx_, "checked.done", cur_fn_);
+            llvm::Value*      in   = range_of(from, converted);
+            b_.CreateCondBr(in, back, done);
+            b_.SetInsertPoint(back);
+            llvm::Value* same = b_.CreateICmpEQ(convert(converted, to, from), v);
+            b_.CreateBr(done);
+            b_.SetInsertPoint(done);
+            llvm::PHINode* phi = b_.CreatePHI(llvm::Type::getInt1Ty(ctx_), 2);
+            phi->addIncoming(llvm::ConstantInt::getFalse(ctx_), test);
+            phi->addIncoming(same, back);
+            exact = phi;
+        } else if (to->is_integer()) {     // float -> int: in range, and a whole number
+            llvm::Value* in    = range_of(to, v);
+            llvm::Value* whole = b_.CreateFCmpOEQ(v, b_.CreateUnaryIntrinsic(llvm::Intrinsic::trunc, v));
+            exact     = b_.CreateAnd(in, whole);
+            llvm::Value* safe = b_.CreateSelect(exact, v, llvm::ConstantFP::get(v->getType(), 0.0));
+            converted = convert(safe, from, to);
+        } else {                           // float -> float: NaN stays NaN; otherwise it must round-trip
+            converted = convert(v, from, to);
+            exact = b_.CreateOr(b_.CreateFCmpUNO(v, v), b_.CreateFCmpOEQ(convert(converted, to, from), v));
+        }
+        const Symbol*     e    = option->symbol;
+        llvm::Type*       et   = user_type(e);
+        llvm::AllocaInst* slot = entry_alloca(et, "checked");
+        b_.CreateStore(llvm::Constant::getNullValue(et), slot);
+        b_.CreateStore(b_.CreateSelect(exact, tag_constant(alternative(e, "some")), tag_constant(alternative(e, "none"))),
+                       b_.CreateStructGEP(et, slot, 0));
+        b_.CreateStore(converted, b_.CreateStructGEP(et, slot, 1));
+        return b_.CreateLoad(et, slot);
     }
 
     // --- globals --------------------------------------------------------------------------

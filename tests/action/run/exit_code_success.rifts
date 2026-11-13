@@ -1,0 +1,8 @@
+// RUN: riftc run %s
+// std::exit_code::success from main is exit status 0 (spec 04).
+import std;
+
+std::exit_code main() {
+    std::println("fine");
+    return std::exit_code::success;
+}

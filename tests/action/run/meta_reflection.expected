@@ -1,0 +1,11 @@
+exit: 0
+--- stdout
+area = 256, next = 7, size = 1
+point { .x = 1.0 .y = 2.5 }
+green
+true
+integer float something else
+unrolled 0
+unrolled 1
+unrolled 2
+--- stderr

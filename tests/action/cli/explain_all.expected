@@ -138,6 +138,11 @@ E4150  error    result must be used
 E4160  error    cannot deduce template argument
 E4170  error    format spec does not fit the value's type
 E4180  error    wrong number of template arguments
+E4190  error    '?' needs a std::result or std::option
+E4191  error    '?' does not fit the function's return type
+E4200  error    not a compile-time value
+E4201  error    compile-time evaluation failed
+E4202  error    compile-time-only value used at run time
 E5001  error    value of a non-copy type would be copied implicitly
 E5002  error    use of a moved value
 E5010  error    references cannot be stored in fields

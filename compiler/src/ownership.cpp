@@ -432,6 +432,11 @@ private:
             break;
         case ExprKind::if_: {
             auto& i = e.as<IfExpr>();
+            if (i.is_compile_time && i.taken >= 0) {   // only the taken branch exists (spec 15)
+                if (i.taken == 0) f(*i.then_block);
+                if (i.taken == 1) f(*i.else_branch);
+                break;
+            }
             f(*i.condition);
             f(*i.then_block);
             if (i.else_branch) f(*i.else_branch);
@@ -453,6 +458,10 @@ private:
             f(*e.as<WhileExpr>().body);
             break;
         case ExprKind::for_:
+            if (e.as<ForExpr>().unrolled) {   // `for compile_time`: the checked copies (spec 26)
+                for (BlockPtr& copy : e.as<ForExpr>().copies) f(*copy);
+                break;
+            }
             f(*e.as<ForExpr>().iterable);
             f(*e.as<ForExpr>().body);
             break;
@@ -555,7 +564,11 @@ private:
         case ExprKind::match:
             for (MatchArm& a : e.as<MatchExpr>().arms) check_copy(*a.body, is_return);
             return;
-        case ExprKind::path:
+        case ExprKind::path: {
+            const Symbol* sym = e.as<PathExpr>().symbol;
+            if (sym && sym->kind == SymbolKind::alternative) return;   // `std::none`, `token::end`: a new value
+            break;
+        }
         case ExprKind::member:
         case ExprKind::index: break;
         default: return;   // temporaries are moved
@@ -650,6 +663,12 @@ private:
             return;
         }
         case ExprKind::call: walk_call(e.as<CallExpr>()); return;
+        case ExprKind::try_: {
+            Expr& operand = *e.as<TryExpr>().operand;
+            walk(operand);
+            consume(operand, nullptr);   // `r?` takes the value out of `r` (spec 11)
+            return;
+        }
         case ExprKind::struct_literal: {
             auto&       sl = e.as<StructLiteralExpr>();
             const Type* t  = types::strip_ref(e.type);
@@ -668,6 +687,11 @@ private:
         case ExprKind::lambda: walk_lambda(e.as<LambdaExpr>()); return;
         case ExprKind::if_: {
             auto& i = e.as<IfExpr>();
+            if (i.is_compile_time && i.taken >= 0) {
+                if (i.taken == 0) walk_block(*i.then_block);
+                if (i.taken == 1) walk(*i.else_branch);
+                return;
+            }
             walk(*i.condition);
             State before = frame_.state;
             walk_block(*i.then_block);
@@ -701,6 +725,18 @@ private:
         }
         case ExprKind::for_: {
             auto& f = e.as<ForExpr>();
+            if (f.unrolled) {   // the copies run one after the other; break/continue leave a copy
+                frame_.loops.push_back(LoopContext{});
+                for (BlockPtr& copy : f.copies) {
+                    walk_block(*copy);
+                    frame_.state                    = merge(frame_.state, frame_.loops.back().continues);
+                    frame_.loops.back().continues   = State::unreachable();
+                }
+                State breaks = frame_.loops.back().breaks;
+                frame_.loops.pop_back();
+                frame_.state = merge(frame_.state, breaks);
+                return;
+            }
             walk(*f.iterable);
             const Symbol* borrowed = nullptr;
             bool          by_ref   = f.type->kind == TypeKind::reference;
@@ -808,6 +844,14 @@ private:
                 mutation(receiver, me.object->span, std::format("call mut method '{}' on", fn->name));
             }
             check_clone(c, me);
+            if (!me.symbol && types::is_std_builtin_method(me.object->type, me.name.segments.back().name)) {
+                consume(*me.object, nullptr);   // value_or, expect, or_error, map_error take the value (spec 11)
+                for (ExprPtr& a : c.args) {
+                    walk(*a);
+                    consume(*a, nullptr);
+                }
+                return;
+            }
         } else if (callee.kind == ExprKind::path) {
             const Symbol* s = callee.as<PathExpr>().symbol;
             if (s && s->kind == SymbolKind::local) use(s, callee.span);

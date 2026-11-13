@@ -6,16 +6,25 @@ add_library(rift STATIC
     src/lexer.cpp
     src/parser.cpp
     src/ast_printer.cpp
+    src/ast_clone.cpp
     src/modules.cpp
     src/resolve.cpp
     src/types.cpp
     src/check.cpp
+    src/compile_time.cpp
     src/ownership.cpp
     src/llvm_backend.cpp
     src/llvm_runtime.cpp
     src/driver.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/std_library.cpp
 )
 target_include_directories(rift PUBLIC include)
+
+# The standard library's Rift source is compiled into riftc. CMake re-runs when it changes.
+set(RIFT_STD_HEADER ${PROJECT_SOURCE_DIR}/library/std/std.rifth)
+file(READ ${RIFT_STD_HEADER} RIFT_STD_HEADER_TEXT)
+configure_file(src/std_library.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/std_library.cpp @ONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RIFT_STD_HEADER})
 target_compile_definitions(rift PRIVATE RIFT_VERSION="${PROJECT_VERSION}")
 
 # LLVM (the backend). Only the backend touches LLVM headers; the front end does not.
